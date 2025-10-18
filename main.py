@@ -5,13 +5,14 @@ from Entities import setup_entities, OPTIONS
 
 
 
+
 # 1) Load model
 nlp = spacy.load("pt_core_news_lg", exclude = "ner")
 setup_entities(nlp)
 
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
-FILE_NAME = "IISerie-007-2025-01-10Supl2.md"
+FILE_NAME = "IIISerie-001-2003-01-02.md"
 
 # 3) Read, process, render
 text = (FILES_DIR / FILE_NAME).read_text(encoding="utf-8")

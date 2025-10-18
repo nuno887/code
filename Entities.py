@@ -2,14 +2,16 @@ from spacy.pipeline import EntityRuler
 import re
 from spacy.language import Language
 from spacy.util import filter_spans
-
+import DocText
+import Paragraphs
 
 OPTIONS = {"colors": {
     "Sumario": "#ffd166",
     "ORG_LABEL": "#6e77b8",
     "ORG_WITH_STAR_LABEL": "#6fffff",
-    "DOC_NAME_LABEL": "#b23bbd"
-    
+    "DOC_NAME_LABEL": "#b23bbd",
+    "DOC_TEXT": "#47965e",
+    "PARAGRAPH": "#14b840",
     }}
 
 
@@ -164,5 +166,7 @@ def setup_entities(nlp):
     ruler.add_patterns(RULER_PATTERNS)
     nlp.add_pipe("allcaps_entity")
     nlp.add_pipe("docname_entity") 
+    nlp.add_pipe("doc_text_entity")
+    nlp.add_pipe("paragraph_entity")
 
 
