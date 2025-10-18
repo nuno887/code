@@ -1,5 +1,5 @@
 from spacy.pipeline import EntityRuler
-import re
+import re, unicodedata
 from spacy.language import Language
 from spacy.util import filter_spans
 import DocText
@@ -12,6 +12,7 @@ OPTIONS = {"colors": {
     "DOC_NAME_LABEL": "#b23bbd",
     "DOC_TEXT": "#47965e",
     "PARAGRAPH": "#14b840",
+    "JUNK_LABEL": "#e11111"
     }}
 
 
@@ -21,7 +22,31 @@ RULER_PATTERNS = [
 
 ]
 
+KNOWN_DOC_NAMES = [
+    "Regulamentação do Trabalho",
+    "Portarias de Extensão:",
+]
+
+def _normalize_for_match(s: str) -> str:
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))  # strip accents
+    s = re.sub(r"\s+", "", s)  # drop ALL whitespace (handles "Tr a b a l h o")
+    return s.casefold()
+
+KNOWN_DOC_NAMES_NORM = { _normalize_for_match(x) for x in KNOWN_DOC_NAMES }
+
 _pattern_allcaps = re.compile(r'[A-ZÁÂÃÀÉÊÍÓÔÕÚÜÇ][A-ZÁÂÃÀÉÊÍÓÔÕÚÜÇ0-9 ,.\'&\-\n]{5,}')
+_junk_rx = re.compile(r"^[\d\s\-\–—\.\,;:·•*'\"`´\+\=\(\)\[\]\{\}/\\<>~^_|]{1,20}$")
+
+def _is_junk_line(s: str) -> bool:
+    s = s.strip()
+    if not s:
+        return False
+    if '|' in s:          
+        return False
+    if any(ch.isalpha() for ch in s):
+        return False
+    return bool(_junk_rx.match(s))
 
 
 def _docname_line_is_eligible(line: str) -> bool:
@@ -116,45 +141,83 @@ def allcaps_entity(doc):
     return doc
 
 
+# NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
+# and handling lines that are just "**" as open/close markers across lines.
+def _iter_bold_blocks(text: str):
+    n = len(text)
+    i = 0
+    while i < n:
+        open_idx = text.find("**", i)
+        if open_idx == -1:
+            break
+        content_start = open_idx + 2
+        j = content_start
+        while True:
+            close_idx = text.find("**", j)
+            if close_idx == -1:
+                # unmatched opener → give up on this opener and move on
+                i = content_start
+                break
+            # If the next non-space after this close is another "**",
+            # treat it as the same bold block and keep searching.
+            k = close_idx + 2
+            while k < n and text[k].isspace():
+                k += 1
+            if k + 1 < n and text[k] == "*" and text[k + 1] == "*":
+                j = k + 2  # continue the block
+                continue
+            # final close for this merged block
+            yield content_start, close_idx
+            i = close_idx + 2
+            break
+
+
+
+
 @Language.component("docname_entity")
 def docname_entity(doc):
     text = doc.text
     spans = []
-
-    lines = text.splitlines(keepends=True)
-    pos = 0
-
-    run_start = None  # char start of current DOC_NAME block
-    run_end = None    # char end (exclusive)
-
-    def flush_run():
-        nonlocal run_start, run_end
-        if run_start is not None and run_end is not None and run_end > run_start:
-            end_idx = run_end - 1 if text[run_end - 1:run_end] == "\n" else run_end
-            span = doc.char_span(run_start, end_idx, label="DOC_NAME_LABEL", alignment_mode="contract")
+    for inner_start, inner_end in _iter_bold_blocks(text):
+        inner = text[inner_start:inner_end]
+        if any(ch.isalpha() and ch.islower() for ch in inner):
+            # CHANGED: expand span to include the ** markers if present
+            start = inner_start - 2 if inner_start >= 2 and text[inner_start-2:inner_start] == "**" else inner_start
+            end = inner_end + 2 if inner_end + 2 <= len(text) and text[inner_end:inner_end+2] == "**" else inner_end
+            span = doc.char_span(start, end, label="DOC_NAME_LABEL", alignment_mode="contract")
             if span is not None:
                 spans.append(span)
-        run_start = None
-        run_end = None
+    if spans:
+        from spacy.util import filter_spans
+        doc.ents = filter_spans(list(doc.ents) + spans)
+    return doc
 
+@Language.component("junk_entity")  # NEW
+def junk_entity(doc):
+    text = doc.text
+    lines = text.splitlines(keepends=True)
+
+    spans = []
+    pos = 0
     for ln in lines:
         line_end = pos + len(ln)
         content = ln[:-1] if ln.endswith("\n") else ln
-        if _docname_line_is_eligible(content):
-            leading_spaces = len(content) - len(content.lstrip())
-            line_start_idx = pos + leading_spaces
-            line_end_idx = line_end - (1 if ln.endswith("\n") else 0)
-            if run_start is None:
-                run_start = line_start_idx
-            run_end = line_end_idx
-        else:
-            flush_run()
+        stripped = content.strip()
+        if stripped:
+            leading = len(content) - len(content.lstrip())
+            trailing = len(content) - len(content.rstrip())
+            start_idx = pos + leading
+            end_idx = (line_end - (1 if ln.endswith("\n") else 0)) - trailing
+
+            if start_idx < end_idx and _is_junk_line(stripped):
+                # skip if overlaps an existing ent
+                if not any(e.start_char < end_idx and e.end_char > start_idx for e in doc.ents):
+                    span = doc.char_span(start_idx, end_idx, label="JUNK_LABEL", alignment_mode="contract")
+                    if span is not None:
+                        spans.append(span)
         pos = line_end
 
-    flush_run()
-
     if spans:
-        from spacy.util import filter_spans
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
 
@@ -166,7 +229,9 @@ def setup_entities(nlp):
     ruler.add_patterns(RULER_PATTERNS)
     nlp.add_pipe("allcaps_entity")
     nlp.add_pipe("docname_entity") 
+    nlp.add_pipe("junk_entity")
     nlp.add_pipe("doc_text_entity")
     nlp.add_pipe("paragraph_entity")
+    
 
 
