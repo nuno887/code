@@ -144,32 +144,56 @@ def allcaps_entity(doc):
 # NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
 # and handling lines that are just "**" as open/close markers across lines.
 def _iter_bold_blocks(text: str):
+    """
+    Yield Markdown bold blocks **...**; merge adjacent pairs on the SAME line.
+    Returns (outer_start, inner_start, inner_end, outer_end).
+    """
     n = len(text)
     i = 0
     while i < n:
         open_idx = text.find("**", i)
         if open_idx == -1:
             break
-        content_start = open_idx + 2
-        j = content_start
-        while True:
-            close_idx = text.find("**", j)
-            if close_idx == -1:
-                # unmatched opener → give up on this opener and move on
-                i = content_start
-                break
-            # If the next non-space after this close is another "**",
-            # treat it as the same bold block and keep searching.
-            k = close_idx + 2
-            while k < n and text[k].isspace():
-                k += 1
-            if k + 1 < n and text[k] == "*" and text[k + 1] == "*":
-                j = k + 2  # continue the block
-                continue
-            # final close for this merged block
-            yield content_start, close_idx
-            i = close_idx + 2
+        inner_start = open_idx + 2
+        close_idx = text.find("**", inner_start)
+        if close_idx == -1:
             break
+
+        # initial block bounds (including **)
+        block_start = open_idx
+        block_end = close_idx + 2
+
+        # try to merge following **...** pairs if only spaces (no newline) lie between
+        j = block_end
+        while j < n:
+            # stop merging if we see a newline between pairs
+            k = j
+            saw_newline = False
+            while k < n and text[k].isspace():
+                if text[k] == "\n":
+                    saw_newline = True
+                    break
+                k += 1
+            if saw_newline:
+                break
+            # next pair must start immediately after spaces
+            if k + 1 < n and text[k] == "*" and text[k + 1] == "*":
+                next_open = k
+                next_inner_start = next_open + 2
+                next_close = text.find("**", next_inner_start)
+                if next_close == -1:
+                    break
+                # extend current block to include this adjacent pair
+                block_end = next_close + 2
+                j = block_end
+            else:
+                break
+
+        yield block_start, inner_start, block_end - 2, block_end
+        i = block_end
+
+
+
 
 
 
@@ -178,17 +202,14 @@ def _iter_bold_blocks(text: str):
 def docname_entity(doc):
     text = doc.text
     spans = []
-    for inner_start, inner_end in _iter_bold_blocks(text):
+    for outer_start, inner_start, inner_end, outer_end in _iter_bold_blocks(text):
         inner = text[inner_start:inner_end]
-        if any(ch.isalpha() and ch.islower() for ch in inner):
-            # CHANGED: expand span to include the ** markers if present
-            start = inner_start - 2 if inner_start >= 2 and text[inner_start-2:inner_start] == "**" else inner_start
-            end = inner_end + 2 if inner_end + 2 <= len(text) and text[inner_end:inner_end+2] == "**" else inner_end
-            span = doc.char_span(start, end, label="DOC_NAME_LABEL", alignment_mode="contract")
+        # Match if (1) normalized text is in your known list OR (2) it contains lowercase letters
+        if (_normalize_for_match(inner) in KNOWN_DOC_NAMES_NORM) or any(ch.isalpha() and ch.islower() for ch in inner):
+            span = doc.char_span(outer_start, outer_end, label="DOC_NAME_LABEL", alignment_mode="contract")
             if span is not None:
                 spans.append(span)
     if spans:
-        from spacy.util import filter_spans
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
 
