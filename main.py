@@ -2,6 +2,7 @@ from pathlib import Path
 import spacy
 from spacy import displacy
 from Entities import setup_entities, OPTIONS
+from Split_TEXT import split_sumario_and_body
 
 
 
@@ -12,11 +13,22 @@ setup_entities(nlp)
 
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
-FILE_NAME = "IISerie-007-2025-01-10Supl2.md"
+FILE_NAME = "IIISerie-14-2014-07-18.md"
 
 # 3) Read, process, render
 text = (FILES_DIR / FILE_NAME).read_text(encoding="utf-8")
 doc = nlp(text)
+
+sumario_text, body_text, _meta = split_sumario_and_body(doc, None)
+
+
+print("=== SUMARIO ===")
+print(sumario_text)
+print("\n=== BODY ===")
+#print(body_text)
+
+
+
 
 html = displacy.render(doc, style="ent", jupyter=False, options= OPTIONS)
 
