@@ -4,9 +4,9 @@ from spacy import displacy
 from Entities import setup_entities, OPTIONS
 from Split_TEXT import split_sumario_and_body
 
-from relations_extractor import RelationExtractor, export_relations_csv, export_relations_grouped_json_by_head
+from relations_extractor import RelationExtractor, export_relations_csv, export_relations_grouped_json_by_head, export_relations_items_minimal_json
 
-# problema no pdf "IISerie-248-2003-12-31Supl09.md", "**4.º CARTÓRIO NOTARIALDO FUNCHAL** DOC_NAME_LABEL", precisava de ser ORG...
+
 
 
 # 1) Load model
@@ -16,11 +16,13 @@ setup_entities(nlp)
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
 FILE_NAME = "IIISerie-14-2014-07-18.md"
-FILE_NAME = "IISerie-248-2003-12-31Supl09.md"
+FILE_NAME = "IISerie-248-2003-12-31.md"
 
 # 3) Read, process, render
 text = (FILES_DIR / FILE_NAME).read_text(encoding="utf-8")
 doc = nlp(text)
+
+
 
 sumario_text, body_text, _meta = split_sumario_and_body(doc, None)
 
@@ -34,12 +36,13 @@ serieIII = False  # True if we have a serie III
 
 doc_sumario = nlp(sumario_text)
 
-rex = RelationExtractor(serieIII=serieIII, debug=True)
+rex = RelationExtractor(debug=True)
 rels = rex.extract(doc_sumario)
 
 
-export_relations_grouped_json_by_head(rels, "relations.ndjson")
-export_relations_csv(rels, "relatons.csv")
+# export_relations_grouped_json_by_head(rels, "relations.ndjson")
+# export_relations_csv(rels, "relatons.csv")
+export_relations_items_minimal_json(rels, "relations.items.minimal.json")
 
 
 """

@@ -118,7 +118,6 @@ class RelationExtractor:
         debug: bool = False,
     ):
         self.valid_labels = valid_labels
-        self.serieIII = serieIII
         self.debug = debug
 
     # ----- public API ---------------------------------------------------------
@@ -196,17 +195,9 @@ class RelationExtractor:
         if head_label == "ORG_WITH_STAR_LABEL" and tail_label == "DOC_NAME_LABEL":
             return "ORG*→DOC_NAME"
 
-        # DOC_NAME → (DOC_TEXT | PARAGRAPH)
-        if head_label == "DOC_NAME_LABEL":
-            if self.serieIII:
-                if tail_label == "DOC_TEXT":
-                    return "DOC_NAME→DOC_TEXT"
-                if tail_label == "PARAGRAPH":
-                    return "DOC_NAME→PARAGRAPH"
-            else:
-                # Treat DOC_TEXT and PARAGRAPH as equivalent when serieIII=False
-                if tail_label in ("DOC_TEXT", "PARAGRAPH"):
-                    return "DOC_NAME→DOC_TEXT"
+        # DOC_NAME -> content: in I/II Série we treat DOC_TEXT and PARAGRAPH as equivalent
+        if head_label == "DOC_NAME_LABEL" and tail_label in ("DOC_TEXT", "PARAGRAPH"):
+            return "DOC_NAME→DOC_TEXT"
 
         return None
 
@@ -454,3 +445,101 @@ def export_relations_csv(relations: Iterable[Relation], path: str) -> None:
                 "tail_label": r.tail.label,
                 "tail_text": r.tail.text,
             })
+
+
+def export_relations_items_minimal_json(relations: Iterable[Relation], path: str) -> None:
+    """
+    Export as minimal hierarchical 'items' (Option D):
+      - Non-star paragraph -> { paragraph_id, org, docs[] }
+      - Star paragraph     -> { paragraph_id, top_org, sub_orgs[ {org, docs[]} ] }
+    Fields keep only {text, label} to stay compact.
+
+    Example:
+    {
+      "items": [
+        {
+          "paragraph_id": 0,
+          "org":  {"text": "...", "label": "ORG_LABEL"},
+          "docs": [{"text":"...","label":"DOC_NAME_LABEL"}, ...]
+        },
+        {
+          "paragraph_id": 5,
+          "top_org": {"text":"...","label":"ORG_WITH_STAR_LABEL"},
+          "sub_orgs": [
+            {
+              "org":  {"text":"...","label":"ORG_LABEL"},
+              "docs": [{"text":"...","label":"DOC_NAME_LABEL"}, ...]
+            }
+          ]
+        }
+      ]
+    }
+    """
+    from collections import OrderedDict
+
+    # Group relations by paragraph_id preserving insertion order
+    by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
+    for r in relations:
+        if r.paragraph_id not in by_pid:
+            by_pid[r.paragraph_id] = []
+        by_pid[r.paragraph_id].append(r)
+
+    items: List[dict] = []
+
+    for pid, rels in by_pid.items():
+        # Is this a star block? (top org with sub-orgs)
+        star_links = [r for r in rels if r.kind == "ORG*→ORG"]
+        if star_links:
+            # pick the first starred head as the top_org (they should all share the same head)
+            top_org_head = star_links[0].head
+            top_org = {"text": top_org_head.text, "label": top_org_head.label}
+
+            # Ordered list of sub-org names (preserve text order as they appear)
+            sub_org_order: "OrderedDict[str, None]" = OrderedDict(
+                (r.tail.text, None) for r in star_links
+            )
+
+            # Collect docs per sub-org (ORG→DOC_NAME)
+            docs_by_org: Dict[str, List[dict]] = {}
+            for r in rels:
+                if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL":
+                    docs_by_org.setdefault(r.head.text, []).append(
+                        {"text": r.tail.text, "label": r.tail.label}
+                    )
+
+            sub_orgs: List[dict] = []
+            for org_text in sub_org_order.keys():
+                sub_orgs.append({
+                    "org": {"text": org_text, "label": "ORG_LABEL"},
+                    "docs": docs_by_org.get(org_text, [])
+                })
+
+            items.append({
+                "paragraph_id": pid,
+                "top_org": top_org,
+                "sub_orgs": sub_orgs
+            })
+            continue  # next paragraph
+
+        # Non-star paragraph: pick the first ORG→DOC_NAME head as the org
+        org_doc_rels = [r for r in rels if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL"]
+        if org_doc_rels:
+            primary_head = org_doc_rels[0].head
+            docs = [
+                {"text": r.tail.text, "label": r.tail.label}
+                for r in org_doc_rels
+                if r.head.text == primary_head.text
+            ]
+            items.append({
+                "paragraph_id": pid,
+                "org": {"text": primary_head.text, "label": primary_head.label},
+                "docs": docs
+            })
+            continue
+
+        # Fallback: no ORG→DOC_NAME found (rare). Skip or capture empty shell.
+        # Here we skip to keep the output clean.
+
+    payload = {"items": items}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)

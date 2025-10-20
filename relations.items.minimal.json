@@ -1,0 +1,157 @@
+{
+  "items": [
+    {
+      "paragraph_id": 0,
+      "org": {
+        "text": "VICE-PRESIDÊNCIA DO GOVERNO REGIONAL E SECRETARIA REGIONAL\nDOS RECURSOS HUMANOS",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Despacho conjunto**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 1,
+      "org": {
+        "text": "SECRETARIAS REGIONAIS DO TURISMO E CULTURA E DO PLANO E\nFINANÇAS",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Despacho conjunto n.º 188/2003**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 2,
+      "org": {
+        "text": "ASSEMBLEIA LEGISLATIVA REGIONAL",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Aviso**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 3,
+      "org": {
+        "text": "SECRETARIA-GERAL DAPRESIDÊNCIA",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Rectificação n.º 25/2003**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 4,
+      "org": {
+        "text": "SECRETARIA REGIONAL DO TURISMO E CULTURA",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Despacho n.º 83/2003**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 5,
+      "org": {
+        "text": "SECRETARIAREGIONAL DO EQUIPAMENTO SOCIAL E TRANSPORTES",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Avisos**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 6,
+      "org": {
+        "text": "SECRETARIAREGIONAL DO PLANO E FINANÇAS",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Avisos**",
+          "label": "DOC_NAME_LABEL"
+        },
+        {
+          "text": "**Despachos**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 7,
+      "org": {
+        "text": "CÂMARA MUNICIPAL DARIBEIRA BRAVA",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Aviso**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 8,
+      "top_org": {
+        "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DO FUNCHAL**",
+        "label": "ORG_WITH_STAR_LABEL"
+      },
+      "sub_orgs": [
+        {
+          "org": {
+            "text": "MERCEARIA A PAZ - COMÉRCIO ALIMENTAR, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Contrato de sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "SNACK-BAR - A FAMÍLIA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Alteração de pacto social**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "TOM, CABELOS - CABELEIREIROS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Contrato de sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

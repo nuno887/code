@@ -18,7 +18,8 @@ OPTIONS = {"colors": {
 
 RULER_PATTERNS = [
 
-{"label": "Sumario", "pattern": "### **Sumário**"}
+{"label": "Sumario", "pattern": "**Sumário**"},
+{"label": "Sumario", "pattern": "**Sumario**"}
 
 ]
 
@@ -67,9 +68,7 @@ def _eligible_line(line: str) -> bool:
     # non-empty, contains letters, at least two words, and NO lowercase letters
     stripped = line.strip()
     return (
-        stripped != ""
-        and any(ch.isalpha() for ch in stripped)
-        and " " in stripped
+        any(ch.isalpha() for ch in stripped)
         and not _line_has_lowercase(line)
     )
 
