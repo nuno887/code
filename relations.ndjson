@@ -1,0 +1,531 @@
+{
+  "paragraphs": [
+    {
+      "paragraph_id": 0,
+      "heads": [
+        {
+          "head": {
+            "text": "MADEIRA RURAL - ASSOCIAÇÃO DE TURISMO EM ESPAÇO RURAL DA\nREGIÃO AUTÓNOMA DA MADEIRA",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de estatutos**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 1,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DO FUNCHAL**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "CARLOS & NUNES - SOCIEDADE DE CONSTRUÇÃO, LIMITADA",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "CARREIROS SOBRE RODAS - TRANSPORTES, UNIPESSOAL, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "DRAGÃO VERMELHO - RESTAURANTES, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "GESPRITUR - SOCIEDADE DE CONSTRUÇÃO E GESTÃO DE PROJECTOS E\nINVESTIMENTOS IMOBILIÁRIOS E TURÍSTICOS, LIMITADA",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "MADIMOGEST - IMOBILIÁRIA, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "NOSSO REFÚGIO - CONSTRUÇÃO CIVIL, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "PANRICO (MADEIRA) - PRODUTOS ALIMENTARES, LIMITADA",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "PORTUGAL & MENEZES, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "RIMORCHIATORI RIUNTI - CONSULTADORIA E SERVIÇOS, SOCIEDADE\nUNIPESSOAL, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "SERAFIM & MICAELA, LIMITADA",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "SOCIEDADE IMOBILIÁRIADE EMPREENDIMENTOS TURÍSTICOS - SAVOI, S.A.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "TEIXEIRA & RUI - SOCIEDADE DE ESCAVAÇÕES E TERRAPLANAGENS DE\nTERRAS, LDA.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "CARLOS & NUNES - SOCIEDADE DE CONSTRUÇÃO, LIMITADA",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Renúncia de gerente**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "CARREIROS SOBRE RODAS - TRANSPORTES, UNIPESSOAL, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Contrato de sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "DRAGÃO VERMELHO - RESTAURANTES, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "GESPRITUR - SOCIEDADE DE CONSTRUÇÃO E GESTÃO DE PROJECTOS E\nINVESTIMENTOS IMOBILIÁRIOS E TURÍSTICOS, LIMITADA",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de sede social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "MADIMOGEST - IMOBILIÁRIA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Contrato de sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "NOSSO REFÚGIO - CONSTRUÇÃO CIVIL, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "PANRICO (MADEIRA) - PRODUTOS ALIMENTARES, LIMITADA",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "PORTUGAL & MENEZES, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Dissolução e encerramento da liquidação da sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "RIMORCHIATORI RIUNTI - CONSULTADORIA E SERVIÇOS, SOCIEDADE\nUNIPESSOAL, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Nomeação de secretário e secretário suplente**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Dissolução e encerramento de liquidação da sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "SERAFIM & MICAELA, LIMITADA",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Contrato de sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "SOCIEDADE IMOBILIÁRIADE EMPREENDIMENTOS TURÍSTICOS - SAVOI, S.A.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Nomeação de administradores**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Nomeação de membros do conselho fiscal**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "TEIXEIRA & RUI - SOCIEDADE DE ESCAVAÇÕES E TERRAPLANAGENS DE\nTERRAS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Renúncia de gerente**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 2,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIA DO REGISTO COMERCIALDO PORTO MONIZ**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "RESTO ZERO - SOCIEDADE DE CONTABILIDADE E GESTÃO, LDA.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "RESTO ZERO - SOCIEDADE DE CONTABILIDADE E GESTÃO, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Contrato de sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 3,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DO PORTO SANTO**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "CLUBE DESPORTIVO - PORTOSANTENSE, HÓQUEI EM PATINS DO PORTO\nSANTO, SAD",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "SOCIEDADE DE DEDESENVOLVIMENTO DO PORTO SANTO, S.A.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "CLUBE DESPORTIVO - PORTOSANTENSE, HÓQUEI EM PATINS DO PORTO\nSANTO, SAD",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Renúncia de presidente do conselho de administração**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Nomeação de presidente do conselho de administração**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "SOCIEDADE DE DEDESENVOLVIMENTO DO PORTO SANTO, S.A.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Pretação de contas do ano de 1999**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Pretação de contas do ano de 2000**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Pretação de contas do ano de 2002**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 4,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIA DO REGISTO COMERCIALDARIBEIRA BRAVA**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "BRAVAMAR - SOCIEDADE HOTELEIRA DA RIBEIRA BRAVA, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "CECÍLIA CAMACHO - SOCIEDADE UNIPESSOAL, LDA.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "BRAVAMAR - SOCIEDADE HOTELEIRA DA RIBEIRA BRAVA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Nomeação de gerentes**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "CECÍLIA CAMACHO - SOCIEDADE UNIPESSOAL, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Pretação de contas do ano de 2002**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 5,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIADO REGISTO COMERCIAL DE SANTANA**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "ALUMÍNIOS DE SANTANA - GOMES & ANDRADE, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "BRAZÃO & BRAZÃO, INVESTIMIENTOS HOTELEIROS, LDA.",
+                "label": "ORG_LABEL"
+              },
+              {
+                "text": "CÂMARA & CAMÂRA, LDA.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "ALUMÍNIOS DE SANTANA - GOMES & ANDRADE, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Contrato de sociedade**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "BRAZÃO & BRAZÃO, INVESTIMIENTOS HOTELEIROS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "CÂMARA & CAMÂRA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Alteração de pacto social**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "paragraph_id": 6,
+      "heads": [
+        {
+          "head": {
+            "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DE SÃO VICENTE**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "AFONSOCARDOSO - CONSTRUÇÕES, LDA.",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
+            "text": "AFONSOCARDOSO - CONSTRUÇÕES, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "relations": {
+            "ORG→DOC_NAME": [
+              {
+                "text": "**Prestação de contas do ano de 2001**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**Prestação de contas do ano de 2002**",
+                "label": "DOC_NAME_LABEL"
+              },
+              {
+                "text": "**4.º CARTÓRIO NOTARIAL DO FUNCHAL**",
+                "label": "DOC_NAME_LABEL"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
