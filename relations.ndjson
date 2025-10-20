@@ -5,6 +5,20 @@
       "heads": [
         {
           "head": {
+            "text": "**4.º CARTÓRIO NOTARIALDO FUNCHAL**",
+            "label": "ORG_WITH_STAR_LABEL"
+          },
+          "relations": {
+            "ORG*→ORG": [
+              {
+                "text": "MADEIRA RURAL - ASSOCIAÇÃO DE TURISMO EM ESPAÇO RURAL DA\nREGIÃO AUTÓNOMA DA MADEIRA",
+                "label": "ORG_LABEL"
+              }
+            ]
+          }
+        },
+        {
+          "head": {
             "text": "MADEIRA RURAL - ASSOCIAÇÃO DE TURISMO EM ESPAÇO RURAL DA\nREGIÃO AUTÓNOMA DA MADEIRA",
             "label": "ORG_LABEL"
           },
@@ -516,10 +530,6 @@
               },
               {
                 "text": "**Prestação de contas do ano de 2002**",
-                "label": "DOC_NAME_LABEL"
-              },
-              {
-                "text": "**4.º CARTÓRIO NOTARIAL DO FUNCHAL**",
                 "label": "DOC_NAME_LABEL"
               }
             ]

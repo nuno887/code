@@ -60,7 +60,8 @@ def _docname_line_is_eligible(line: str) -> bool:
 
 
 def _line_has_lowercase(line: str) -> bool:
-    return any(ch.isalpha() and ch.islower() for ch in line)
+    # count only characters in the Unicode "Ll" (Letter, lowercase) category
+    return any(ch.isalpha() and unicodedata.category(ch) == 'Ll' for ch in line)
 
 def _eligible_line(line: str) -> bool:
     # non-empty, contains letters, at least two words, and NO lowercase letters
