@@ -15,8 +15,8 @@ setup_entities(nlp)
 
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
-FILE_NAME = "IIISerie-14-2014-07-18.md"
-FILE_NAME = "IISerie-248-2003-12-31.md"
+FILE_NAME = "IIIserie-20-2014-10-17.md"
+#FILE_NAME = "IISerie-247-2003-12-30Supl9.md"
 
 # 3) Read, process, render
 text = (FILES_DIR / FILE_NAME).read_text(encoding="utf-8")
@@ -43,12 +43,6 @@ rels = rex.extract(doc_sumario)
 # export_relations_grouped_json_by_head(rels, "relations.ndjson")
 # export_relations_csv(rels, "relatons.csv")
 export_relations_items_minimal_json(rels, "relations.items.minimal.json")
-
-
-"""
-for r in rels:
-    print(f"[p{r.paragraph_id} s{r.sent_id}] {r.kind}: {r.head.text!r}  ->  {r.tail.text!r}")
-"""
 
 
 

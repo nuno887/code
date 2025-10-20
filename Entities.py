@@ -12,20 +12,27 @@ OPTIONS = {"colors": {
     "DOC_NAME_LABEL": "#b23bbd",
     "DOC_TEXT": "#47965e",
     "PARAGRAPH": "#14b840",
-    "JUNK_LABEL": "#e11111"
+    "JUNK_LABEL": "#e11111",
+    "SERIE_III": "#D1B1B1"
     }}
 
 
 RULER_PATTERNS = [
 
 {"label": "Sumario", "pattern": "**Sumário**"},
-{"label": "Sumario", "pattern": "**Sumario**"}
+{"label": "Sumario", "pattern": "**Sumario**"},
+{"label": "SERIE_III", "pattern": "Direção Regional do Trabalho"},
+{"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"}
 
 ]
 
 KNOWN_DOC_NAMES = [
     "Regulamentação do Trabalho",
     "Portarias de Extensão:",
+    "Convenções Colectivas de Trabalho:",
+    "Despachos:",
+    "Regulamentos de Condições Mínimas:",
+    "Estatutos/Alterações:",
 ]
 
 def _normalize_for_match(s: str) -> str:
