@@ -93,8 +93,8 @@ def paragraph_entity(doc):
                     break
 
                 nxt_slice = text[nxt.start_char:nxt.end_char]
-                if _looks_like_list_start(nxt_slice):
-                    break  # do not merge into lists/bullets
+                #if _looks_like_list_start(nxt_slice):
+                 #   break  # do not merge into lists/bullets
 
                 ends_like_sentence = _ends_with_terminator(last_piece)
                 nxt_lead = _leading_alpha_case_or_none(nxt_slice)
