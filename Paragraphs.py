@@ -9,7 +9,6 @@ PARAGRAPH_LABEL = "PARAGRAPH"
 _term_rx = re.compile(r"[.!?]\s*$")  # strong terminators at end
 
 
-
 def _starts_with_upper(s: str) -> bool:
     # Skip leading spaces and opening punctuation/symbols (quotes, dashes, brackets…)
     for ch in s.lstrip():
@@ -32,6 +31,41 @@ def _starts_with_upper(s: str) -> bool:
 def _ends_with_terminator(s: str) -> bool:
     return bool(_term_rx.search(s.strip()))
 
+
+def _leading_alpha_case_or_none(s: str):
+    """
+    After skipping spaces and opening punctuation/symbols, return:
+      - 'lower' if first significant alpha is lowercase
+      - 'upper' if uppercase
+      - None   if first significant char is non-alpha or string is empty
+    """
+    for ch in s.lstrip():
+        if ch.isalpha():
+            return 'upper' if ch == ch.upper() else 'lower'
+        cat = unicodedata.category(ch)
+        if ch.isspace():
+            continue
+        if cat.startswith(("P", "S")):  # opening punctuation/symbol
+            continue
+        return None
+    return None
+
+
+_list_start_rx = re.compile(
+    r"""
+    ^\s*
+    (?:[-•—–]            # dash/bullet
+     |\d+\s*[\)\.]       # 1) or 1.
+    )
+    """,
+    re.VERBOSE,
+)
+
+def _looks_like_list_start(s: str) -> bool:
+    """Detect simple list/bullet starts to avoid false merges."""
+    return bool(_list_start_rx.search(s))
+
+
 @Language.component("paragraph_entity")
 def paragraph_entity(doc):
     text = doc.text
@@ -49,17 +83,32 @@ def paragraph_entity(doc):
             last_piece = text[ent.start_char:ent.end_char]
 
             j = i
-            # Concatenate TEXT ents until we hit a strong terminator or a non-TEXT entity
-            while not _ends_with_terminator(last_piece):
+            # Concatenate TEXT ents; allow continuation if next line starts lowercase.
+            while True:
                 k = j + 1
                 if k >= n:
                     break
                 nxt = ents[k]
                 if nxt.label_ != TEXT_LABEL:
                     break
+
+                nxt_slice = text[nxt.start_char:nxt.end_char]
+                if _looks_like_list_start(nxt_slice):
+                    break  # do not merge into lists/bullets
+
+                ends_like_sentence = _ends_with_terminator(last_piece)
+                nxt_lead = _leading_alpha_case_or_none(nxt_slice)
+
+                # If current ends with . ! ? but next starts lowercase, treat as wrapped continuation.
+                if ends_like_sentence and nxt_lead == 'lower':
+                    ends_like_sentence = False
+
+                if ends_like_sentence:
+                    break
+
                 # extend paragraph to include next TEXT line
                 end = nxt.end_char
-                last_piece = text[nxt.start_char:nxt.end_char]
+                last_piece = nxt_slice
                 j = k
 
             span = doc.char_span(start, end, label=PARAGRAPH_LABEL, alignment_mode="contract")
@@ -72,4 +121,3 @@ def paragraph_entity(doc):
     if spans:
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
-

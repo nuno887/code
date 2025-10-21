@@ -16,7 +16,7 @@ setup_entities(nlp)
 
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
-FILE_NAME = "IIIserie-19-2014-10-02.md"
+FILE_NAME = "IIISerie-005-2003-03-03.md"
 #FILE_NAME = "IISerie-247-2003-12-30Supl9.md"
 
 is_serieIII = "iiiserie" in FILE_NAME.lower()

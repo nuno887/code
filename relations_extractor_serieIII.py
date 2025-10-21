@@ -343,34 +343,49 @@ def export_serieIII_json_grouped(relations: Iterable[Relation], path: str) -> No
 
 def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str) -> None:
     """
-    III Série items exporter with Mode A fallback support:
-      - If DOC_NAME exists: bodies come from DOC_NAME→(DOC_TEXT|PARAGRAPH).
-      - If no DOC_NAME: bodies come from ORG→(DOC_TEXT|PARAGRAPH), doc_name = None.
-      - 'bodies' is always a list (possibly empty).
-      - ORGs are collected from both ORG→DOC_NAME and ORG→BODY fallback relations.
+    Compact III Série exporter:
+      - Top-level "orgs": [{id, text, label}]
+      - Items: { paragraph_id, org_ids: [id...], doc_name (or None), bodies: [...] }
+      - Supports both:
+          * DOC_NAME path: DOC_NAME→(DOC_TEXT|PARAGRAPH)
+          * Mode A fallback: ORG→(DOC_TEXT|PARAGRAPH) when no DOC_NAME
     """
     from collections import OrderedDict
 
+    # 1) Bucket by paragraph
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
     for r in relations:
         by_pid.setdefault(r.paragraph_id, []).append(r)
 
+    # 2) Collect unique ORGs across the whole doc and assign ids
+    org_to_id: dict[tuple[str, str], int] = {}
+    orgs_out: list[dict] = []
+
+    def get_org_id(text: str, label: str) -> int:
+        key = (text, label)
+        if key not in org_to_id:
+            org_to_id[key] = len(org_to_id) + 1
+            orgs_out.append({"id": org_to_id[key], "text": text, "label": label})
+        return org_to_id[key]
+
     items: List[dict] = []
+
     for pid, rels in by_pid.items():
-        # ORGs (collect from ORG→DOC_NAME and ORG→BODY fallback)
+        # ORGs for this paragraph (from both ORG→DOC_NAME and ORG→BODY fallback)
         org_heads = [
             r.head for r in rels
             if r.head.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL")
             and r.kind in ("ORG→DOC_NAME", "ORG*→DOC_NAME", "ORG→DOC_TEXT", "ORG→PARAGRAPH")
         ]
-        seen_org = set()
-        org_list = []
+        org_ids: list[int] = []
+        seen_local: set[int] = set()
         for h in org_heads:
-            if h.text not in seen_org:
-                seen_org.add(h.text)
-                org_list.append({"text": h.text, "label": h.label})
+            oid = get_org_id(h.text, h.label)
+            if oid not in seen_local:
+                seen_local.add(oid)
+                org_ids.append(oid)
 
-        # Primary DOC_NAME if present (prefer tail of ORG→DOC_NAME; fallback to any DOC_NAME head)
+        # Primary DOC_NAME if present (prefer tail of ORG→DOC_NAME; else any DOC_NAME head)
         docname_tails = [r.tail for r in rels if r.kind in ("ORG→DOC_NAME", "ORG*→DOC_NAME")]
         if docname_tails:
             doc_span = docname_tails[0]
@@ -380,13 +395,10 @@ def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str)
 
         # Bodies path A: from DOC_NAME→...
         bodies_docname = [r.tail for r in rels if r.kind in ("DOC_NAME→DOC_TEXT", "DOC_NAME→PARAGRAPH")]
-        # Bodies path B (Mode A fallback): from ORG→...
+        # Bodies path B: from ORG→... (Mode A fallback)
         bodies_org = [r.tail for r in rels if r.kind in ("ORG→DOC_TEXT", "ORG→PARAGRAPH")]
 
-        item: dict = {"paragraph_id": pid}
-        if org_list:
-            item["orgs"] = org_list
-
+        item: dict = {"paragraph_id": pid, "org_ids": org_ids}
         if doc_span is not None:
             item["doc_name"] = {"text": doc_span.text, "label": doc_span.label}
             item["bodies"] = [{"text": b.text, "label": b.label} for b in bodies_docname]
@@ -396,9 +408,10 @@ def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str)
 
         items.append(item)
 
-    payload = {"items": items}
+    payload = {"orgs": orgs_out, "items": items}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
 
 
 
