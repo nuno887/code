@@ -1,19 +1,92 @@
 {
+  "orgs": [
+    {
+      "id": 1,
+      "text": "SECRETARIA REGIONAL DOS RECURSOS HUMANOS",
+      "label": "ORG_LABEL"
+    }
+  ],
   "items": [
     {
-      "paragraph_id": 0,
-      "org": {
-        "text": "SECRETARIA REGIONAL DAS FINANÇAS",
-        "label": "ORG_LABEL"
+      "paragraph_id": 1,
+      "org_ids": [
+        1
+      ],
+      "doc_name": {
+        "text": "**Regulamentação do Trabalho**",
+        "label": "DOC_NAME_LABEL"
       },
-      "docs": [
+      "bodies": []
+    },
+    {
+      "paragraph_id": 2,
+      "org_ids": [
+        1
+      ],
+      "doc_name": {
+        "text": "**Despachos:**",
+        "label": "DOC_NAME_LABEL"
+      },
+      "bodies": [
         {
-          "text": "**Aviso n.º 309/2025**",
-          "label": "DOC_NAME_LABEL"
+          "text": "“ Iga  - Investimentos e Gestão de Água, S.A ” - Autorização para Adopção de\nRegime de Laboração Contínua. ....................................................................................",
+          "label": "PARAGRAPH"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 3,
+      "org_ids": [
+        1
+      ],
+      "doc_name": {
+        "text": "**Regulamentos de Extensão:**",
+        "label": "DOC_NAME_LABEL"
+      },
+      "bodies": [
+        {
+          "text": "Portaria que Aprova o Regulamento de Extensão do Contrato Colectivo de Trabalho\nentre a Associação Comercial e Industrial do Funchal - Câmara de Comércio e\nIndústria da Madeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da\nRegião Autónoma da Madeira - Para as Escolas de Ensino de Condução Automóvel",
+          "label": "PARAGRAPH"
         },
         {
-          "text": "**Aviso n.º 310/2025**",
-          "label": "DOC_NAME_LABEL"
+          "text": "- Revisão Salarial e Outras. ............................................................................................",
+          "label": "DOC_TEXT"
+        },
+        {
+          "text": "Portaria que Aprova o Regulamento de Extensão do CCT entre a AEEP - Assoc. dos\nEstabelecimentos de Ensino Particular e Cooperativo e o SINAPE - Sind. Nacional\ndos Profissionais da Educação - Revisão Global. ..........................................................",
+          "label": "PARAGRAPH"
+        },
+        {
+          "text": "Aviso de Projecto de Portaria que Aprova o Regulamento de Extensão do CCT entre\na Associação Comercial e Industrial do Funchal - Câmara de Comércio e Indústria da\nMadeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da Região\nAutónoma da Madeira - Para os Profissionais ao Serviço de Garagens, Estações de\nServiço, Parques de Estacionamento, Postos de Abastecimento de Combustíveis,\nPostos de Assistência a Pneumáticos, Revenda e Distribuição de Gás na Região\nAutónoma da Madeira - Revisão Salarial e Outras. .......................................................",
+          "label": "PARAGRAPH"
+        },
+        {
+          "text": "Aviso de Projecto de Portaria que Aprova o Regulamento de Extensão do CCTV\nentre a ASSICOM - Associação da Indústria, Associação da Construção da Região\nAutónoma da Madeira e o SICOMA - Sindicato dos Trabalhadores da Construção,\nMadeiras, Olarias e Afins da Região Autónoma da Madeira e Outros - Revisão\nSalarial e Outras. ............................................................................................................",
+          "label": "PARAGRAPH"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 4,
+      "org_ids": [
+        1
+      ],
+      "doc_name": {
+        "text": "**Convenções Colectivas de Trabalho:**",
+        "label": "DOC_NAME_LABEL"
+      },
+      "bodies": [
+        {
+          "text": "CCT entre a Associação Comercial e Industrial do Funchal - Câmara de Comércio e\nIndústria da Madeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da\nRegião Autónoma da Madeira - Para os Profissionais ao Serviço de Garagens,\nEstações de Serviço, Parques de Estacionamento, Postos de Abastecimento de\nCombustíveis, Postos de Assistência a Pneumáticos, Revenda e Distribuição de Gás\nna Região Autónoma na Madeira - Revisão Salarial e Outras. .......................................",
+          "label": "PARAGRAPH"
+        },
+        {
+          "text": "CCTV entre a ASSICOM - Associação da Indústria, Associação da Construção da\nRegião Autónoma da Madeira e o SICOMA - Sindicato dos Trabalhadores da\nConstrução, Madeiras, Olarias e Afins da Região Autónoma da Madeira e Outros Revisão Salarial e Outras. ...............................................................................................",
+          "label": "PARAGRAPH"
+        },
+        {
+          "text": "Acordo de Empresa Celebrado entre a Cimentos Madeira, LDA, e a Federação dos\nSindicatos das Indústrias de Cerâmica, Cimento e Vidro de Portugal - Revisão Global.",
+          "label": "PARAGRAPH"
         }
       ]
     }

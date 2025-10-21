@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-markup"
+version = "0.1.0"
+description = "Batch-convert PDFs to Markdown with top-cropping and bold-run merging heuristics."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "You" }]
+dependencies = [
+  "PyMuPDF>=1.24.0",       # provides `fitz`
+  "pymupdf4llm>=0.0.14",   # pdf -> markdown
+]
+
+[project.scripts]
+pdf-markup = "pdf_markup.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
