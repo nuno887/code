@@ -1,72 +1,19 @@
 {
-  "orgs": [
-    {
-      "id": 1,
-      "text": "SECRETARIAREGIONAL DOS RECURSOS HUMANOS",
-      "label": "ORG_LABEL"
-    }
-  ],
   "items": [
     {
-      "paragraph_id": 1,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Regulamentação do Trabalho**",
-        "label": "DOC_NAME_LABEL"
+      "paragraph_id": 0,
+      "org": {
+        "text": "SECRETARIA REGIONAL DAS FINANÇAS",
+        "label": "ORG_LABEL"
       },
-      "bodies": []
-    },
-    {
-      "paragraph_id": 2,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Portarias de Extensão:**",
-        "label": "DOC_NAME_LABEL"
-      },
-      "bodies": [
+      "docs": [
         {
-          "text": "PE dos CCTpara os Consultórios Médicos, Policlínicas e Estabelecimentos Similares.",
-          "label": "DOC_TEXT"
+          "text": "**Aviso n.º 309/2025**",
+          "label": "DOC_NAME_LABEL"
         },
         {
-          "text": "Portaria de Extensão do Contrato Colectivo de Trabalho Vertical para o Sector dos\nSimilares de Hotelaria da Região Autónoma da Madeira. .............................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "Aviso para PE do Contrato Colectivo de Trabalho entre a Associação dos Industriais e\nExportadores de Bordados e Tapeçarias, da Madeira e o Sindicato dos Trabalhadores\nda Indústria de Bordados, Tapeçarias, Têxteis e Artesanato da Região Autónoma da\nMadeira-Para o Sector da Indústria de Bordados e Tapeçarias da Madeira-Revisão da\nTabela Salarial e Clausulado. ..........................................................................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "Aviso para PE do CCT entre a ARESP-Assoc. da Restauração e Similares de Portugal\ne a FESAHT-Feder. dos Sind. da Alimentação, Bebidas, Hotelaria e Turismo de\nPortugal e Outros (cantinas, refeitórios e fábricas de refeições)-Alteração Salarial e\nOutras. ............................................................................................................................",
-          "label": "PARAGRAPH"
-        }
-      ]
-    },
-    {
-      "paragraph_id": 3,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Convenções Colectivas de Trabalho:**",
-        "label": "DOC_NAME_LABEL"
-      },
-      "bodies": [
-        {
-          "text": "Contrato Colectivo de Trabalho entre a Associação dos Industriais e Exportadores de\nBordados e Tapeçarias da Madeira e o Sindicato dos Trabalhadores da Indústria de\nBordados, Tapeçarias, Têxteis e Artesanato da Região Autónoma da Madeira-Para o\nSector da Indústria de Bordados e Tapeçarias da Madeira-Revisão da Tabela Salarial e\nClausulado. .....................................................................................................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "CCT entre a ARESP-Assoc. da Restauração e Similares de Portugal e a FESAHTFeder. dos Sind. da Alimentação, Bebidas, Hotelaria e Turismo de Portugal e Outros\n(cantinas, refeitórios e fábricas de refeições)-Alteração Salarial e Outras. .....................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "CCTentre a Liga Portuguesa de Futebol Profissional e a FESAHT-Feder. dos Sind. da\nAlimentação, Bebidas, Hotelaria e Turismo de Portugal e entre a mesma entidade e a\nFEPCES-Feder. Portuguesa dos Sind. do Comércio, Escritórios e Serviços e OutrosIntegração em níveis de qualificação. .............................................................................",
-          "label": "PARAGRAPH"
+          "text": "**Aviso n.º 310/2025**",
+          "label": "DOC_NAME_LABEL"
         }
       ]
     }
