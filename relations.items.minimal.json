@@ -1,88 +1,273 @@
 {
-  "orgs": [
-    {
-      "id": 1,
-      "text": "SECRETARIA REGIONAL DOS RECURSOS HUMANOS",
-      "label": "ORG_LABEL"
-    }
-  ],
   "items": [
     {
-      "paragraph_id": 1,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Regulamentação do Trabalho**",
-        "label": "DOC_NAME_LABEL"
+      "paragraph_id": 0,
+      "org": {
+        "text": "S E C R E TA R I AR E G I O N A L DO TURISMO E CULT U R A",
+        "label": "ORG_LABEL"
       },
-      "bodies": []
+      "docs": [
+        {
+          "text": "**Av i s o**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
+    },
+    {
+      "paragraph_id": 1,
+      "org": {
+        "text": "S E C R E TA R I AR E G I O N A LD AE D U C A Ç Ã O",
+        "label": "ORG_LABEL"
+      },
+      "docs": [
+        {
+          "text": "**Av i s o**",
+          "label": "DOC_NAME_LABEL"
+        }
+      ]
     },
     {
       "paragraph_id": 2,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Despachos:**",
-        "label": "DOC_NAME_LABEL"
+      "org": {
+        "text": "S E C R E TA R I AR E G I O N A L DO AMBIENTE E DOS RECURSOS NAT U R A I S",
+        "label": "ORG_LABEL"
       },
-      "bodies": [
+      "docs": [
         {
-          "text": "“ Iga  - Investimentos e Gestão de Água, S.A ” - Autorização para Adopção de\nRegime de Laboração Contínua. ....................................................................................",
-          "label": "PARAGRAPH"
+          "text": "**Av i s o**",
+          "label": "DOC_NAME_LABEL"
         }
       ]
     },
     {
       "paragraph_id": 3,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Regulamentos de Extensão:**",
-        "label": "DOC_NAME_LABEL"
+      "org": {
+        "text": "SOCIEDADE DE DESENVOLV I M E N TO DO PORTO SANTO, S.A",
+        "label": "ORG_LABEL"
       },
-      "bodies": [
+      "docs": [
         {
-          "text": "Portaria que Aprova o Regulamento de Extensão do Contrato Colectivo de Trabalho\nentre a Associação Comercial e Industrial do Funchal - Câmara de Comércio e\nIndústria da Madeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da\nRegião Autónoma da Madeira - Para as Escolas de Ensino de Condução Automóvel\n\n   - Revisão Salarial e Outras. ............................................................................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "Portaria que Aprova o Regulamento de Extensão do CCT entre a AEEP - Assoc. dos\nEstabelecimentos de Ensino Particular e Cooperativo e o SINAPE - Sind. Nacional\ndos Profissionais da Educação - Revisão Global. ..........................................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "Aviso de Projecto de Portaria que Aprova o Regulamento de Extensão do CCT entre\na Associação Comercial e Industrial do Funchal - Câmara de Comércio e Indústria da\nMadeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da Região\nAutónoma da Madeira - Para os Profissionais ao Serviço de Garagens, Estações de\nServiço, Parques de Estacionamento, Postos de Abastecimento de Combustíveis,\nPostos de Assistência a Pneumáticos, Revenda e Distribuição de Gás na Região\nAutónoma da Madeira - Revisão Salarial e Outras. .......................................................",
-          "label": "PARAGRAPH"
-        },
-        {
-          "text": "Aviso de Projecto de Portaria que Aprova o Regulamento de Extensão do CCTV\nentre a ASSICOM - Associação da Indústria, Associação da Construção da Região\nAutónoma da Madeira e o SICOMA - Sindicato dos Trabalhadores da Construção,\nMadeiras, Olarias e Afins da Região Autónoma da Madeira e Outros - Revisão\nSalarial e Outras. ............................................................................................................",
-          "label": "PARAGRAPH"
+          "text": "**Anúncio de concurso**",
+          "label": "DOC_NAME_LABEL"
         }
       ]
     },
     {
       "paragraph_id": 4,
-      "org_ids": [
-        1
-      ],
-      "doc_name": {
-        "text": "**Convenções Colectivas de Trabalho:**",
-        "label": "DOC_NAME_LABEL"
+      "top_org": {
+        "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DE CÂMARADE LOBOS**",
+        "label": "ORG_WITH_STAR_LABEL"
       },
-      "bodies": [
+      "sub_orgs": [
         {
-          "text": "CCT entre a Associação Comercial e Industrial do Funchal - Câmara de Comércio e\nIndústria da Madeira e o Sindicato dos Trabalhadores de Transportes Rodoviários da\nRegião Autónoma da Madeira - Para os Profissionais ao Serviço de Garagens,\nEstações de Serviço, Parques de Estacionamento, Postos de Abastecimento de\nCombustíveis, Postos de Assistência a Pneumáticos, Revenda e Distribuição de Gás\nna Região Autónoma na Madeira - Revisão Salarial e Outras. .......................................",
-          "label": "PARAGRAPH"
+          "org": {
+            "text": "AGOSTINHO & ORLANDO, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Renúncia do gere n t e s**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "paragraph_id": 5,
+      "top_org": {
+        "text": "**C O N S E RVAT Ó R I A DO REGISTO COMERCIALDO FUNCHAL**",
+        "label": "ORG_WITH_STAR_LABEL"
+      },
+      "sub_orgs": [
+        {
+          "org": {
+            "text": "A S S I S T E L - COMUNICAÇÕES, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Alteração de pacto social**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
         },
         {
-          "text": "CCTV entre a ASSICOM - Associação da Indústria, Associação da Construção da\nRegião Autónoma da Madeira e o SICOMA - Sindicato dos Trabalhadores da\nConstrução, Madeiras, Olarias e Afins da Região Autónoma da Madeira e Outros Revisão Salarial e Outras. ...............................................................................................",
-          "label": "PARAGRAPH"
+          "org": {
+            "text": "LONG BEACH - INVESTIMENTOS IMOBILIÁRIOS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Contrato de sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
         },
         {
-          "text": "Acordo de Empresa Celebrado entre a Cimentos Madeira, LDA, e a Federação dos\nSindicatos das Indústrias de Cerâmica, Cimento e Vidro de Portugal - Revisão Global.",
-          "label": "PARAGRAPH"
+          "org": {
+            "text": "M A R I A & SELENE, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Contrato de sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "R E S TAURANTE SNACK - BAR MARISQUEIRAD AAJUDA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Alteração de pacto social**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "TOQUE ORIENTA L - A RTIGOS DECORATIVOS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Contrato de sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "paragraph_id": 6,
+      "top_org": {
+        "text": "**C O N S E RVAT Ó R I A DO REGISTO COMERCIALDE SANTA C R U Z**",
+        "label": "ORG_WITH_STAR_LABEL"
+      },
+      "sub_orgs": [
+        {
+          "org": {
+            "text": "ALEIXO & A LVES, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Alteração de pacto social**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "DRULOFER - SOCIEDADE DE EQUIPA M E N TOS DAMADEIRA, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Nomeação de membros dos conselhos fiscal e de administração**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "GÉNESE - S.G.P.S., S.A.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Renúncia de fiscais único e suplente**",
+              "label": "DOC_NAME_LABEL"
+            },
+            {
+              "text": "**Nomeação de fiscais único e suplente**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "J U V E N A LF R E I TAS - TÁXI UNIPESSOAL, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Alteração de pacto social**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "M A D E I R A - RENT, SOCIEDADE DE ALUGUER DE AUTOMÓVEIS, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Nomeação de gerente**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "MOVIMES - MÓVEIS & ARTESANATO, LDA.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Dissolução encerramento da liquidação da sociedade**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "PSICIVIL - SOCIEDADE DE CONSTRUÇÕES, S.A.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Renúncia de fiscais único e suplente**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "PSIPRO - GESTÃO, ENGENHARIA E PLANEAMENTO IMOBILIÁRIO, S.A.",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Renúncia de fiscal único e suplente**",
+              "label": "DOC_NAME_LABEL"
+            },
+            {
+              "text": "**Nomeação de fiscais único e suplente**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
+        },
+        {
+          "org": {
+            "text": "RIU HOTELS, S.A. - SUCURSAL EM PORTUGAL",
+            "label": "ORG_LABEL"
+          },
+          "docs": [
+            {
+              "text": "**Revogação de mandato de procurador**",
+              "label": "DOC_NAME_LABEL"
+            },
+            {
+              "text": "**Nomeação de procuradores**",
+              "label": "DOC_NAME_LABEL"
+            }
+          ]
         }
       ]
     }

@@ -10,7 +10,7 @@ from relations_extractor_serieIII import RelationExtractorSerieIII, export_serie
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IIISerie-03-2006-02-01.pdf"
+PDF_NAME = "IISerie-128-2005-07-06.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()
@@ -29,7 +29,7 @@ doc = nlp(text)
 sumario_text, body_text, _meta = split_sumario_and_body(doc, None)
 
 
-
+doc_body = nlp(body_text)
 doc_sumario = nlp(sumario_text)
 if is_serieIII:
     rex = RelationExtractorSerieIII(debug=True)
@@ -48,7 +48,7 @@ else:
 
 
 
-html = displacy.render(doc_sumario, style="ent", jupyter=False, options= OPTIONS)
+html = displacy.render(doc_body, style="ent", jupyter=False, options= OPTIONS)
 
 
 full_html = f"""<!doctype html>
