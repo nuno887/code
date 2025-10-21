@@ -91,24 +91,21 @@ class RelationExtractorSerieIII:
 
     # --- public API -----------------------------------------------------------
     def extract(self, doc_sumario: Doc) -> List[Relation]:
-        ents = self._collect_entities(doc_sumario)  # preserves original order
+        ents = self._collect_entities(doc_sumario)
 
-        # Group by paragraph (III Série item)
         by_para: Dict[Optional[int], List[EntitySpan]] = {}
         for e in ents:
             by_para.setdefault(e.paragraph_id, []).append(e)
 
         relations: List[Relation] = []
         for pid, seq in by_para.items():
-
-            # Decicion mode per paragraph
             has_org = any(e.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL") for e in seq)
             has_marker = any(e.label == "SERIE_III" for e in seq)
             mode: Literal["A", "B"] = "B" if (has_org and has_marker) else "A"
 
             relations.extend(self._extract_block(doc_sumario, seq, pid, sent_id=None, mode=mode))
-
         return relations
+
 
     # --- internals ------------------------------------------------------------
     def _dbg(self, *args):
@@ -116,31 +113,58 @@ class RelationExtractorSerieIII:
             print("[serieIII]", *args)
 
     def _collect_entities(self, doc: Doc) -> List[EntitySpan]:
-        """
-        III Série paragraph detection (skeleton):
-          • Start a NEW paragraph when we see a DOC_NAME_LABEL.
-          • If an ORG_LABEL appears and no paragraph has started yet, start a paragraph.
-          • If an ORG_WITH_STAR_LABEL appears, also start a paragraph (rare but supported).
-
-        TODO: If your corpus uses a custom 'Sumario' header label or line-break markers
-        to delimit items, add that logic here.
-        """
         collected: List[EntitySpan] = []
         current_pid = -1
-        started = False  # whether we've started the first paragraph
+        started = False
 
-        for e in doc.ents:  # keep spaCy's order
+        # >>> ADDED: track Mode B activation and last seen ORG / marker spans
+        mode_b_active = False
+        last_org_span: Optional[Span] = None
+        last_marker_span: Optional[Span] = None
+        seen_org = False
+        seen_marker = False
+        # <<<
+
+        for e in doc.ents:
             if e.label_ not in self.valid_labels:
                 continue
 
+            # >>> ADDED: remember ORG and SERIE_III, and (lazily) activate Mode B when both seen
+            if e.label_ in ("ORG_LABEL", "ORG_WITH_STAR_LABEL"):
+                seen_org = True
+                last_org_span = e
+            elif e.label_ == "SERIE_III":
+                seen_marker = True
+                last_marker_span = e
+
+            if not mode_b_active and seen_org and seen_marker:
+                mode_b_active = True
+            # <<<
+
             if e.label_ in ("DOC_NAME_LABEL", "ORG_WITH_STAR_LABEL"):
-                current_pid += 1
-                started = True
+                # CHANGED: in Mode B, every DOC_NAME starts a new paragraph
+                if e.label_ == "DOC_NAME_LABEL" and mode_b_active:
+                    current_pid += 1
+                    started = True
+
+                    # >>> ADDED: propagate ORG and SERIE_III into this new paragraph
+                    if last_org_span is not None:
+                        collected.append(
+                            EntitySpan.from_span(last_org_span, paragraph_id=current_pid, sent_id=None)
+                        )
+                    if last_marker_span is not None:
+                        collected.append(
+                            EntitySpan.from_span(last_marker_span, paragraph_id=current_pid, sent_id=None)
+                        )
+                    # <<<
+
+                else:
+                    current_pid += 1
+                    started = True
+
             elif e.label_ == "ORG_LABEL" and not started:
-                # If an ORG appears before any DOC_NAME in the document, treat it as a start.
                 current_pid += 1
                 started = True
-            # else: remain in current paragraph
 
             pid = current_pid if current_pid >= 0 else None
             collected.append(EntitySpan.from_span(e, paragraph_id=pid, sent_id=None))
@@ -148,6 +172,7 @@ class RelationExtractorSerieIII:
         if self.debug:
             self._dbg(f"Collected ents: {len(collected)} across {current_pid + 1 if current_pid >= 0 else 0} paragraphs")
         return collected
+
 
     def _pair_kind(self, head_label: str, tail_label: str) -> Optional[RelKind]:
         # ORG → DOC_NAME
@@ -171,17 +196,9 @@ class RelationExtractorSerieIII:
         seq: List[EntitySpan],
         paragraph_id: Optional[int],
         sent_id: Optional[int],
-        mode: Literal["A", "B"] = "A"
+        mode: Literal["A", "B"] = "A",   # (already added previously)
     ) -> List[Relation]:
-        """
-        Minimal left→right scan:
-          - Link ORG/ORG* → nearest-right DOC_NAME
-          - Link DOC_NAME → nearest-right DOC_TEXT or PARAGRAPH (whichever appears first)
-        No cross-paragraph links. Deterministic. No dependency parsing.
-        """
         out: List[Relation] = []
-        # track per-head tail label types to avoid duplicate *types* per head,
-        # BUT allow multiple DOC_NAMEs for one ORG (common in III Série? usually 1, but safe).
         linked_tail_labels_by_head: Dict[int, set[str]] = {}
 
         n = len(seq)
@@ -198,8 +215,13 @@ class RelationExtractorSerieIII:
                 if kind is None:
                     continue
 
-                # allow multiple *→DOC_NAME; dedupe other tail types
-                allow_multi = (tail.label == "DOC_NAME_LABEL")
+                # >>> CHANGED: in Mode B, allow multiple bodies (DOC_TEXT / PARAGRAPH) per DOC_NAME
+                if mode == "B" and head.label == "DOC_NAME_LABEL" and tail.label in ("DOC_TEXT", "PARAGRAPH"):
+                    allow_multi = True
+                else:
+                    allow_multi = (tail.label == "DOC_NAME_LABEL")
+                # <<<
+
                 if not allow_multi and tail.label in already:
                     continue
 
@@ -214,17 +236,12 @@ class RelationExtractorSerieIII:
                 if not allow_multi:
                     already.add(tail.label)
 
-                # For DOC_NAME → (DOC_TEXT | PARAGRAPH), stop after the FIRST content we found
-                if head.label == "DOC_NAME_LABEL":
+                # >>> CHANGED: in Mode B, do NOT stop after the first body; in Mode A, keep old behavior
+                if head.label == "DOC_NAME_LABEL" and mode != "B":
                     break
-
-            # OPTIONAL: if you want only the first DOC_NAME per ORG in III Série, uncomment:
-            # if head.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL"):
-            #     break
-
-        # No special pruning step here; if you later add star blocks that also link directly to docs,
-        # you can add a similar pruning as in the base module.
+                # <<<
         return out
+
 
 # ---- Export helpers (III Série tailored) -------------------------------------
 
@@ -271,54 +288,68 @@ def export_serieIII_json_grouped(relations: Iterable[Relation], path: str) -> No
 
 def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str) -> None:
     """
-    Minimal 'items' JSON tailored to III Série.
-
-    Heuristic mapping (skeleton):
-      - Each paragraph_id becomes one item.
-      - Primary DOC_NAME is the first DOC_NAME encountered in that paragraph.
-      - 'body' prefers DOC_TEXT; if absent, falls back to PARAGRAPH (kept separate if you want both).
-
-    TODO: If an item contains multiple DOC_NAMEs (rare in III Série), either:
-          (a) split into multiple items here, or
-          (b) keep an array of doc_names and arrays of bodies. Current skeleton keeps the first.
+    Variant of the III Série items exporter that avoids repeating ORGs on every item.
+    - Top-level "orgs": [{id, text, label}]
+    - Each item references orgs via "org_ids": [int, ...]
+    - Items still include: paragraph_id, doc_name, bodies (list)
     """
+    from collections import OrderedDict
+
+    # 1) Bucket relations by paragraph
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
     for r in relations:
         by_pid.setdefault(r.paragraph_id, []).append(r)
 
+    # 2) Collect unique orgs across the whole document; assign stable ids
+    org_to_id: dict[tuple[str, str], int] = {}
+    orgs_out: list[dict] = []
+    def get_org_id(text: str, label: str) -> int:
+        key = (text, label)
+        if key not in org_to_id:
+            org_to_id[key] = len(org_to_id) + 1
+            orgs_out.append({"id": org_to_id[key], "text": text, "label": label})
+        return org_to_id[key]
+
     items: List[dict] = []
+
     for pid, rels in by_pid.items():
-        # collect parts
+        # ORGs (unique per item, but referenced by id)
+        org_heads = [r.head for r in rels if r.kind in ("ORG→DOC_NAME", "ORG*→DOC_NAME")]
+        org_ids: list[int] = []
+        seen_local: set[int] = set()
+        for h in org_heads:
+            oid = get_org_id(h.text, h.label)
+            if oid not in seen_local:
+                seen_local.add(oid)
+                org_ids.append(oid)
+
+        # DOC_NAME (first encountered, with fallback if only DOC_NAME→* exists)
         doc_names = [r.tail for r in rels if r.kind in ("ORG→DOC_NAME", "ORG*→DOC_NAME")]
-        body_texts = [r.tail for r in rels if r.kind == "DOC_NAME→DOC_TEXT"]
-        paras = [r.tail for r in rels if r.kind == "DOC_NAME→PARAGRAPH"]
-        orgs = [r.head for r in rels if r.kind in ("ORG→DOC_NAME", "ORG*→DOC_NAME")]
+        if not doc_names:
+            # fallback: take the head of any DOC_NAME→* relation
+            heads_docname = [r.head for r in rels if r.head.label == "DOC_NAME_LABEL"]
+            doc_span = heads_docname[0] if heads_docname else None
+        else:
+            doc_span = doc_names[0]
 
-        item: dict = {"paragraph_id": pid}
+        # Bodies: all DOC_TEXT/PARAGRAPH linked from doc_name in this paragraph
+        bodies_all = [r.tail for r in rels if r.kind in ("DOC_NAME→DOC_TEXT", "DOC_NAME→PARAGRAPH")]
 
-        if orgs:
-            # keep distinct orgs in order of appearance
-            seen = set()
-            item["orgs"] = []
-            for h in orgs:
-                if h.text not in seen:
-                    seen.add(h.text)
-                    item["orgs"].append({"text": h.text, "label": h.label})
+        item: dict = {"paragraph_id": pid, "org_ids": org_ids}
+        if doc_span is not None:
+            item["doc_name"] = {"text": doc_span.text, "label": doc_span.label}
+        if bodies_all:
+            item["bodies"] = [{"text": b.text, "label": b.label} for b in bodies_all]
+        else:
+            item["bodies"] = []  # empty list if no body for this DOC_NAME
 
-        if doc_names:
-            # choose the first as the primary name (skeleton)
-            item["doc_name"] = {"text": doc_names[0].text, "label": doc_names[0].label}
-            # TODO: if you want all doc names, add: item["doc_names"] = [...]
-        # body: prefer DOC_TEXT; else PARAGRAPH
-        if body_texts:
-            item["body"] = {"text": body_texts[0].text, "label": body_texts[0].label}
-        elif paras:
-            item["body"] = {"text": paras[0].text, "label": paras[0].label}
-
-        # Only append non-empty items
-        if any(k in item for k in ("orgs", "doc_name", "body")):
+        # Keep the item (even if it only has doc_name without bodies)
+        if any(k in item for k in ("doc_name", "bodies", "org_ids")):
             items.append(item)
 
-    payload = {"items": items}
+    payload = {"orgs": orgs_out, "items": items}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+

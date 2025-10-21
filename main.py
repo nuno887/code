@@ -4,7 +4,8 @@ from spacy import displacy
 from Entities import setup_entities, OPTIONS
 from Split_TEXT import split_sumario_and_body
 
-from relations_extractor import RelationExtractor, export_relations_csv, export_relations_grouped_json_by_head, export_relations_items_minimal_json
+from relations_extractor import RelationExtractor, export_relations_items_minimal_json
+from relations_extractor_serieIII import RelationExtractorSerieIII, export_serieIII_items_minimal_json
 
 
 
@@ -15,8 +16,10 @@ setup_entities(nlp)
 
 # 2) Paths (edit FILE_NAME to switch files)
 FILES_DIR = Path("files")
-FILE_NAME = "IIIserie-20-2014-10-17.md"
+FILE_NAME = "IIIserie-23-2014-12-02.md"
 #FILE_NAME = "IISerie-247-2003-12-30Supl9.md"
+
+is_serieIII = "iiiserie" in FILE_NAME.lower()
 
 # 3) Read, process, render
 text = (FILES_DIR / FILE_NAME).read_text(encoding="utf-8")
@@ -27,22 +30,20 @@ doc = nlp(text)
 sumario_text, body_text, _meta = split_sumario_and_body(doc, None)
 
 
-#print("=== SUMARIO ===")
-# print(sumario_text)
-#print("\n=== BODY ===")
-#print(body_text)
-
-serieIII = False  # True if we have a serie III
 
 doc_sumario = nlp(sumario_text)
+if is_serieIII:
+    rex = RelationExtractorSerieIII(debug=True)
+else:
+    rex = RelationExtractor(debug=True)
 
-rex = RelationExtractor(debug=True)
 rels = rex.extract(doc_sumario)
 
 
-# export_relations_grouped_json_by_head(rels, "relations.ndjson")
-# export_relations_csv(rels, "relatons.csv")
-export_relations_items_minimal_json(rels, "relations.items.minimal.json")
+if is_serieIII:
+    export_serieIII_items_minimal_json(rels, "relations.items.minimal.json")
+else:  
+    export_relations_items_minimal_json(rels, "relations.items.minimal.json")
 
 
 
