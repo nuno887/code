@@ -1,24 +1,33 @@
-# Paragraphs.py
 import re
 from spacy.language import Language
 from spacy.util import filter_spans
+import unicodedata
 
 TEXT_LABEL = "DOC_TEXT"
 PARAGRAPH_LABEL = "PARAGRAPH"
 
 _term_rx = re.compile(r"[.!?]\s*$")  # strong terminators at end
 
+
+
 def _starts_with_upper(s: str) -> bool:
-    # first non-space char must be an uppercase letter
+    # Skip leading spaces and opening punctuation/symbols (quotes, dashes, brackets…)
     for ch in s.lstrip():
         if ch.isalpha():
             return ch == ch.upper()
-        elif ch.strip() == "":
+        if ch.isdigit():
+            return True  # allow numeric-start paragraphs if needed
+        cat = unicodedata.category(ch)
+        if ch.isspace():
             continue
-        else:
-            # non-letter first token (e.g., punctuation) → not a valid paragraph start
-            return False
+        # Unicode categories: P* = punctuation, S* = symbol
+        if cat.startswith(("P", "S")):
+            # keep skipping leading punctuation/symbols like “ ‘ ( [ { — -
+            continue
+        # Any other leading character → not a valid paragraph start
+        return False
     return False
+
 
 def _ends_with_terminator(s: str) -> bool:
     return bool(_term_rx.search(s.strip()))
