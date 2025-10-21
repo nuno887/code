@@ -15,6 +15,7 @@ Label = Literal[
     "DOC_NAME_LABEL",
     "DOC_TEXT",
     "PARAGRAPH",
+    "SERIE_III",
 ]
 
 RelKind = Literal[
@@ -81,6 +82,7 @@ class RelationExtractorSerieIII:
             "DOC_NAME_LABEL",
             "DOC_TEXT",
             "PARAGRAPH",
+            "SERIE_III",
         ),
     ):
         self.debug = debug
@@ -98,9 +100,13 @@ class RelationExtractorSerieIII:
 
         relations: List[Relation] = []
         for pid, seq in by_para.items():
-            # In III Série we usually don't have star blocks with sub-org lists,
-            # so a single block pass often suffices. Keep hook if needed later.
-            relations.extend(self._extract_block(doc_sumario, seq, pid, sent_id=None))
+
+            # Decicion mode per paragraph
+            has_org = any(e.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL") for e in seq)
+            has_marker = any(e.label == "SERIE_III" for e in seq)
+            mode: Literal["A", "B"] = "B" if (has_org and has_marker) else "A"
+
+            relations.extend(self._extract_block(doc_sumario, seq, pid, sent_id=None, mode=mode))
 
         return relations
 
@@ -165,6 +171,7 @@ class RelationExtractorSerieIII:
         seq: List[EntitySpan],
         paragraph_id: Optional[int],
         sent_id: Optional[int],
+        mode: Literal["A", "B"] = "A"
     ) -> List[Relation]:
         """
         Minimal left→right scan:
