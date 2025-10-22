@@ -13,7 +13,7 @@ import html as html_lib
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IISerie-099-2005-05-23Supl.pdf"
+PDF_NAME = "IISerie-040-2005-02-25Supl.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()

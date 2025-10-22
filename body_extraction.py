@@ -257,7 +257,10 @@ def _collect_suborg_anchors_coalesced(
     *,
     max_merge: int = 3,
 ) -> List[SpanInfo]:
-    """Within [bstart,bend), coalesce adjacent ORG_LABEL/ORG_WITH_STAR_LABEL spans and keep those matching valid_suborg_keys."""
+    """
+    Within [bstart,bend), coalesce adjacent ORG spans and keep those whose _org_key matches
+    valid_suborg_keys. IMPORTANT: returns ALL matching occurrences in order (no dedup).
+    """
     block_orgs = [s for s in spans if s.label in ORG_LABELS and bstart <= s.start_char < bend]
     block_orgs.sort(key=lambda s: s.start_char)
 
@@ -289,16 +292,9 @@ def _collect_suborg_anchors_coalesced(
                 anchors.append(block_orgs[i])
             i += 1
 
-    # Deduplicate by key, keeping first occurrence (order matters for slicing)
-    seen = set()
-    out: List[SpanInfo] = []
-    for a in anchors:
-        k = _org_key(a.text)
-        if k not in seen:
-            seen.add(k)
-            out.append(a)
-    out.sort(key=lambda s: s.start_char)
-    return out
+    anchors.sort(key=lambda s: s.start_char)
+    return anchors
+
 
 def _build_org_blocks_coalesced_to_json(
     doc_text: str,
@@ -357,15 +353,20 @@ def divide_body_by_org_and_docs(
     verbose: bool = False,
 ) -> Tuple[List[OrgBlockResult], Dict[str, Any]]:
     """
-    Flat schema:
-      items[].org + docs
-    Hierarchical schema:
-      items[].top_org + sub_orgs[].org + sub_orgs[].docs
+    Supports two JSON schemas:
 
-    Behavior:
-      - ORG blocks (top or flat) are built only from JSON-listed ORGs, coalescing adjacent ORG lines, matched with _org_key.
-      - Within a (sub-)ORG block, docs are sliced by sequential matching to DOC_NAME_LABEL.
-      - Brutal fallback: if zero name matches but DOC_NAME_LABELs exist, slice all headers present.
+    Flat:
+      items[].org + docs  -> slice by DOC_NAME_LABEL (with fallbacks).
+
+    Hierarchical:
+      items[].top_org + sub_orgs[].org + sub_orgs[].docs
+        -> inside each top_org block, cut **ORG→next ORG** for **every occurrence**
+           of each sub_org header (no dedup), then map these slices sequentially
+           to the sub_org's JSON docs. Extras => partial; shortages => partial.
+
+    Flat-mode fallbacks (unchanged):
+      - If headers exist but no names match, slice all headers present.
+      - If zero headers and exactly 1 JSON doc, slice the whole block as that doc (ok).
     """
     data = coerce_items_payload(serieIII_json_or_path)
     items = data.get("items", [])
@@ -385,86 +386,32 @@ def divide_body_by_org_and_docs(
     total_docs_expected = 0
     total_docs_matched = 0
 
-    # Helper: slice docs within [bstart,bend) given JSON doc list
+    # ---- helper for FLAT mode: slice docs inside [bstart,bend) ----
     def _slice_docs_in_block(
-    bstart: int,
-    bend: int,
-    json_docs: List[Dict[str, Any]],
-    org_label_text_raw: str,
-) -> Tuple[List[DocSlice], List[str], str, int]:
-        """
-        Slice documents within [bstart, bend) for a given ORG/sub-ORG block.
-
-        Behavior:
-        - Sequentially matches JSON docs to DOC_NAME_LABEL anchors by normalized text.
-        - Zero-header fallbacks:
-            (a) if NO DOC_NAME_LABEL and len(json_docs) == 1 -> whole block (status 'ok')
-            (b) if NO DOC_NAME_LABEL and len(json_docs) > 1  ->
-                try splitting by repeated sub-ORG header inside the block (same _org_key);
-                map segments to JSON docs in order; if no repeats, make one whole-block slice
-                named with the first JSON doc (status 'partial').
-        """
+        bstart: int,
+        bend: int,
+        json_docs: List[Dict[str, Any]],
+        org_label_text_raw: str,
+    ) -> Tuple[List[DocSlice], List[str], str, int]:
         # Ordered DOC_NAME anchors inside this block
         docname_spans_sorted = sorted(
             _spans_within(spans, bstart, bend, labels={DOC_NAME_LABEL}),
             key=lambda s: s.start_char
         )
 
-        # --- Zero-header fallback (a): exactly 1 expected doc -> whole block (ok) ---
+        # Zero-header fallback: exactly 1 expected doc -> whole block (ok)
         if not docname_spans_sorted and len(json_docs) == 1:
             jdoc_raw = json_docs[0].get("text", "")
+            if verbose:
+                print(f"[INFO] Zero-header fallback: whole-block slice for ORG {org_label_text_raw!r}")
             return (
-                [DocSlice(
-                    doc_name=_strip_markdown_bold(jdoc_raw).strip(),
-                    text=doc_text[bstart:bend],
-                )],
-                [],      # unmatched_docs
-                "ok",    # status
-                1        # matched_count
+                [DocSlice(doc_name=_strip_markdown_bold(jdoc_raw).strip(),
+                          text=doc_text[bstart:bend])],
+                [],
+                "ok",
+                1
             )
 
-        # --- Zero-header fallback (b): >1 expected docs -> split by repeated sub-ORG header, else whole-block partial ---
-        if not docname_spans_sorted and len(json_docs) > 1:
-            # Find repeated occurrences of the SAME sub-ORG header within this block
-            self_key = _org_key(org_label_text_raw)
-            repeat_spans = sorted(
-                [s for s in _spans_within(spans, bstart, bend, labels=ORG_LABELS)
-                if _org_key(s.text) == self_key],
-                key=lambda s: s.start_char
-            )
-
-            # Use additional occurrences (after the block's own anchor at bstart) as internal cut points
-            internal_starts = [s.start_char for s in repeat_spans if s.start_char > bstart]
-
-            if internal_starts:
-                starts = [bstart] + internal_starts
-                ends = starts[1:] + [bend]
-                num_segments = len(starts)
-
-                matched_count = min(num_segments, len(json_docs))
-                matched_slices: List[DocSlice] = []
-                for idx in range(matched_count):
-                    jdoc_raw = json_docs[idx].get("text", "")
-                    matched_slices.append(
-                        DocSlice(
-                            doc_name=_strip_markdown_bold(jdoc_raw).strip(),
-                            text=doc_text[starts[idx]:ends[idx]],
-                        )
-                    )
-                unmatched_docs = [d.get("text", "") for d in json_docs[matched_count:]]
-                status = "ok" if matched_count == len(json_docs) == num_segments else "partial"
-                return matched_slices, unmatched_docs, status, matched_count
-            else:
-                # No repeats -> salvage content as a single whole-block slice named by the first JSON doc (partial)
-                jdoc_raw = json_docs[0].get("text", "")
-                matched_slices = [DocSlice(
-                    doc_name=_strip_markdown_bold(jdoc_raw).strip(),
-                    text=doc_text[bstart:bend],
-                )]
-                unmatched_docs = [d.get("text", "") for d in json_docs[1:]]
-                return matched_slices, unmatched_docs, "partial", 1
-
-        # --- Normal path: headers exist -> sequential name matching ---
         matched_slices: List[DocSlice] = []
         unmatched_docs: List[str] = []
 
@@ -474,25 +421,38 @@ def divide_body_by_org_and_docs(
                     return s.start_char
             return bend
 
+        # Sequential name matching; if zero matches but headers exist, slice all headers
         json_doc_names = [normalize_text(d.get("text", "")) for d in json_docs]
-        i = 0
+        i_ptr = 0
         for jdoc_raw, jdoc_norm in zip([d.get("text", "") for d in json_docs], json_doc_names):
-            while i < len(docname_spans_sorted) and normalize_text(docname_spans_sorted[i].text) != jdoc_norm:
-                i += 1
-            if i < len(docname_spans_sorted):
-                head_span = docname_spans_sorted[i]
+            while i_ptr < len(docname_spans_sorted) and normalize_text(docname_spans_sorted[i_ptr].text) != jdoc_norm:
+                i_ptr += 1
+            if i_ptr < len(docname_spans_sorted):
+                head_span = docname_spans_sorted[i_ptr]
                 start = head_span.start_char
                 end = _slice_end(start)
-                matched_slices.append(
-                    DocSlice(
-                        doc_name=_strip_markdown_bold(jdoc_raw).strip(),
-                        text=doc_text[start:end],
-                    )
-                )
-                i += 1
+                matched_slices.append(DocSlice(
+                    doc_name=_strip_markdown_bold(jdoc_raw).strip(),
+                    text=doc_text[start:end]
+                ))
+                i_ptr += 1
             else:
                 unmatched_docs.append(jdoc_raw)
 
+        # Brutal fallback: slice all headers if no name-matches but headers exist
+        if not matched_slices and docname_spans_sorted:
+            if verbose:
+                print(f"[INFO] Fallback: slicing {len(docname_spans_sorted)} docs by body headers for ORG {org_label_text_raw!r}")
+            for h in docname_spans_sorted:
+                start = h.start_char
+                end = _slice_end(start)
+                matched_slices.append(DocSlice(
+                    doc_name=_strip_markdown_bold(h.text).strip(),
+                    text=doc_text[start:end]
+                ))
+            unmatched_docs = [d.get("text", "") for d in json_docs]
+
+        # Status
         if len(json_docs) == 0:
             status = "ok"
         elif matched_slices and unmatched_docs:
@@ -503,7 +463,6 @@ def divide_body_by_org_and_docs(
             status = "ok"
 
         return matched_slices, unmatched_docs, status, len(matched_slices)
-
 
     if not hierarchical:
         # -------- FLAT MODE --------
@@ -544,7 +503,7 @@ def divide_body_by_org_and_docs(
                     docs=matched_slices,
                     status=status,
                 ))
-                # optional writes
+
                 if write_org_files:
                     org_slug = re.sub(r"[^\w.-]+", "_", normalize_text(json_org_text_raw))[:120]
                     path = out_dir / f"{file_prefix}_ORG_{idx:03d}_{org_slug}.txt"
@@ -575,7 +534,7 @@ def divide_body_by_org_and_docs(
                 ))
 
     else:
-        # -------- HIERARCHICAL MODE --------
+        # -------- HIERARCHICAL MODE (ORG→ORG per occurrence) --------
         # 1) Build top_org blocks
         top_org_keys = {_org_key(item.get("top_org", {}).get("text", "")) for item in items}
         top_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, top_org_keys)
@@ -587,7 +546,7 @@ def divide_body_by_org_and_docs(
         # Count total sub_orgs as "orgs_total"
         total_orgs = sum(len(item.get("sub_orgs", [])) for item in items)
 
-        # 2) For each top_org, segment sub_orgs and slice docs
+        # 2) For each top_org, cut sub_org occurrences ORG→next ORG and map to docs
         for item in items:
             top_org_raw = item.get("top_org", {}).get("text", "")
             top_key = _org_key(top_org_raw)
@@ -609,79 +568,33 @@ def divide_body_by_org_and_docs(
                 continue
 
             _, tstart, tend = top_lookup[top_key]
-            top_block_text = doc_text[tstart:tend]
 
             # Build valid sub-org keys for this item (from JSON)
             sub_keys = {_org_key(sub.get("org", {}).get("text", "")) for sub in sub_orgs}
 
-            # Collect/merge sub-org anchors present in the body within the top block
+            # Collect ALL occurrences of sub-org anchors within the top block
             sub_anchors = _collect_suborg_anchors_coalesced(doc_text, spans, tstart, tend, sub_keys)
-
-            # Build a lookup by key (first occurrence)
-            sub_lookup: Dict[str, SpanInfo] = {}
-            for a in sub_anchors:
-                sub_lookup.setdefault(_org_key(a.text), a)
-
-            # Sort anchors by position for end boundaries
             sub_anchors_sorted = sorted(sub_anchors, key=lambda s: s.start_char)
 
-            def _sub_end(start_char: int) -> int:
-                for s in sub_anchors_sorted:
-                    if s.start_char > start_char:
-                        return s.start_char
-                return tend
+            # Precompute end boundary for each anchor: next sub-org anchor or end of top block
+            end_by_anchor_id: Dict[int, int] = {}
+            for idx_a, a in enumerate(sub_anchors_sorted):
+                end_by_anchor_id[id(a)] = sub_anchors_sorted[idx_a + 1].start_char if idx_a + 1 < len(sub_anchors_sorted) else tend
 
-            # For each JSON sub_org in order, slice its sub-block and docs
+            # Group anchors by sub-org key (PRESERVE ORDER, KEEP ALL OCCURRENCES)
+            anchors_by_key: Dict[str, List[SpanInfo]] = {}
+            for a in sub_anchors_sorted:
+                anchors_by_key.setdefault(_org_key(a.text), []).append(a)
+
+            # For each JSON sub_org: create one slice per occurrence and map sequentially to docs
             for sub in sub_orgs:
                 sub_raw = sub.get("org", {}).get("text", "")
                 sub_key = _org_key(sub_raw)
                 json_docs = sub.get("docs", [])
                 total_docs_expected += len(json_docs)
 
-                if sub_key in sub_lookup:
-                    sub_span = sub_lookup[sub_key]
-                    sb_start = sub_span.start_char
-                    sb_end = _sub_end(sb_start)
-                    sub_block_text = doc_text[sb_start:sb_end]
-
-                    matched_slices, unmatched_docs, status, matched_count = _slice_docs_in_block(
-                        sb_start, sb_end, json_docs, sub_raw
-                    )
-                    total_docs_matched += matched_count
-
-                    if status == "ok":
-                        org_ok += 1
-                    elif status == "partial":
-                        org_partial += 1
-                    elif status == "doc_missing":
-                        org_doc_missing += 1
-
-                    results.append(OrgBlockResult(
-                        org=_strip_markdown_bold(sub_raw).strip(),
-                        org_block_text=sub_block_text,
-                        docs=matched_slices,
-                        status=status,
-                    ))
-
-                    if write_org_files:
-                        org_slug = re.sub(r"[^\w.-]+", "_", normalize_text(sub_raw))[:120]
-                        path = out_dir / f"{file_prefix}_SUBORG_{org_slug}.txt"
-                        with open(path, "w", encoding="utf-8") as f:
-                            f.write("DOC_BEGIN\n")
-                            f.write(f"ORG: {_strip_markdown_bold(sub_raw).strip()}\n")
-                            f.write(sub_block_text)
-                            f.write("\nDOC_END\n")
-                    if write_doc_files and matched_slices:
-                        for k, ds in enumerate(matched_slices, start=1):
-                            doc_slug = re.sub(r"[^\w.-]+", "_", normalize_text(ds.doc_name))[:120]
-                            path = out_dir / f"{file_prefix}_SUBORG_DOC_{k:03d}_{doc_slug}.txt"
-                            with open(path, "w", encoding="utf-8") as f:
-                                f.write("DOC_BEGIN\n")
-                                f.write(f"ORG: {_strip_markdown_bold(sub_raw).strip()}\n")
-                                f.write(f"DOC: {ds.doc_name}\n")
-                                f.write(ds.text)
-                                f.write("\nDOC_END\n")
-                else:
+                occurs = anchors_by_key.get(sub_key, [])
+                if not occurs:
                     org_missing += 1
                     if verbose:
                         print(f"[WARN] sub_org not found in body: {sub_raw!r}")
@@ -691,6 +604,56 @@ def divide_body_by_org_and_docs(
                         docs=[],
                         status="org_missing",
                     ))
+                    continue
+
+                # ORG→ORG slices for each occurrence
+                slices: List[DocSlice] = []
+                for occ in occurs:
+                    s = occ.start_char
+                    e = end_by_anchor_id[id(occ)]
+                    slices.append(DocSlice(
+                        doc_name=_strip_markdown_bold(occ.text).strip(),  # temp name; may be replaced by JSON doc title
+                        text=doc_text[s:e]
+                    ))
+
+                # Map sequentially to JSON docs; rename first N slices with JSON titles
+                matched_count = min(len(slices), len(json_docs))
+                matched_slices: List[DocSlice] = []
+                for i_pair in range(matched_count):
+                    jdoc_raw = json_docs[i_pair].get("text", "")
+                    matched_slices.append(DocSlice(
+                        doc_name=_strip_markdown_bold(jdoc_raw).strip(),
+                        text=slices[i_pair].text
+                    ))
+                # Append any extra body slices beyond JSON docs (keep body header name)
+                if len(slices) > matched_count:
+                    matched_slices.extend(slices[matched_count:])
+
+                # Determine status
+                if len(slices) == len(json_docs) == matched_count:
+                    status = "ok"
+                else:
+                    status = "partial"
+
+                total_docs_matched += len(matched_slices)
+
+                results.append(OrgBlockResult(
+                    org=_strip_markdown_bold(sub_raw).strip(),
+                    org_block_text=doc_text[occurs[0].start_char : end_by_anchor_id[id(occurs[-1])]],
+                    docs=matched_slices,
+                    status=status,
+                ))
+
+                if write_doc_files and matched_slices:
+                    for k, ds in enumerate(matched_slices, start=1):
+                        doc_slug = re.sub(r"[^\w.-]+", "_", normalize_text(ds.doc_name))[:120]
+                        path = out_dir / f"{file_prefix}_SUBORG_DOC_{k:03d}_{doc_slug}.txt"
+                        with open(path, "w", encoding="utf-8") as f:
+                            f.write("DOC_BEGIN\n")
+                            f.write(f"ORG: {_strip_markdown_bold(sub_raw).strip()}\n")
+                            f.write(f"DOC: {ds.doc_name}\n")
+                            f.write(ds.text)
+                            f.write("\nDOC_END\n")
 
     summary = {
         "orgs_total": total_orgs,
@@ -702,6 +665,7 @@ def divide_body_by_org_and_docs(
         "docs_matched": total_docs_matched,
     }
     return results, summary
+
 
 
 
