@@ -4,11 +4,33 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import json
 import re
+import unicodedata
 
 # --------------------------------------------------------------------------------------
 # Normalization helpers (NO regex-based searching in the body; these are only for
 # text cleanup/equality checks across JSON <-> labeled spans.)
 # --------------------------------------------------------------------------------------
+
+
+def _strip_accents(s: str) -> str:
+    if s is None:
+        return ""
+    nfkd = unicodedata.normalize("NFD", s)
+    return "".join(ch for ch in nfkd if unicodedata.category(ch) != "Mn")
+
+def _org_key(s: str) -> str:
+    """
+    Aggressive normalization for ORG comparisons:
+    - strip markdown bold
+    - remove accents
+    - remove ALL non-alphanumerics (spaces, punctuation)
+    - uppercase
+    """
+    s = _strip_markdown_bold(s)
+    s = _strip_accents(s)
+    s = re.sub(r"[^A-Za-z0-9]", "", s)
+    return s.upper()
+
 
 def _strip_markdown_bold(s: str) -> str:
     # Remove surrounding ** that may appear in headers
@@ -144,6 +166,54 @@ def _spans_within(spans: List[SpanInfo], start: int, end: int, labels: Optional[
                 out.append(s)
     return out
 
+def _build_org_blocks_coalesced_to_json(
+    doc_text: str,
+    spans: List[SpanInfo],
+    valid_org_keys: set[str],
+    *,
+    max_merge: int = 3,
+) -> List[Tuple[SpanInfo, int, int]]:
+    orgs = [s for s in spans if s.label in ORG_LABELS]
+    orgs.sort(key=lambda s: s.start_char)
+
+    anchors: List[SpanInfo] = []
+    i = 0
+    while i < len(orgs):
+        best_j = None
+        end_char = orgs[i].end_char
+        concatenated_raw = orgs[i].text  # start with raw to keep original casing/accents
+
+        for j in range(i, min(i + max_merge, len(orgs))):
+            if j > i:
+                gap = doc_text[end_char:orgs[j].start_char]
+                if not re.match(r"^[\s•\-–,.;:]*$", gap):
+                    break
+                concatenated_raw = concatenated_raw + " " + orgs[j].text  # keep a space between parts
+            # check the aggressive key
+            if _org_key(concatenated_raw) in valid_org_keys:
+                best_j = j
+            end_char = orgs[j].end_char
+
+        if best_j is not None:
+            start_char = orgs[i].start_char
+            end_char = orgs[best_j].end_char
+            text_slice = doc_text[start_char:end_char]
+            anchors.append(SpanInfo(label=orgs[i].label, text=text_slice, start_char=start_char, end_char=end_char))
+            i = best_j + 1
+        else:
+            if _org_key(orgs[i].text) in valid_org_keys:
+                anchors.append(orgs[i])
+            i += 1
+
+    blocks: List[Tuple[SpanInfo, int, int]] = []
+    for k, a in enumerate(anchors):
+        start = a.start_char
+        end = anchors[k + 1].start_char if k + 1 < len(anchors) else len(doc_text)
+        blocks.append((a, start, end))
+    return blocks
+
+
+
 # --------------------------------------------------------------------------------------
 # JSON loading
 # --------------------------------------------------------------------------------------
@@ -164,6 +234,22 @@ def coerce_items_payload(serieIII_json_or_path: Any) -> Dict[str, Any]:
 # Main function: divide by ORG first, then by DOC_NAME within each ORG block
 # --------------------------------------------------------------------------------------
 
+def _build_org_blocks_filtered(
+    doc_text: str,
+    spans: List[SpanInfo],
+    valid_org_norms: set[str],
+) -> List[Tuple[SpanInfo, int, int]]:
+    """Like _build_org_blocks, but only uses ORG anchors whose normalized text is in the JSON."""
+    orgs = [s for s in spans if s.label in ORG_LABELS and normalize_text(s.text) in valid_org_norms]
+    orgs.sort(key=lambda s: s.start_char)
+    blocks: List[Tuple[SpanInfo, int, int]] = []
+    for i, org in enumerate(orgs):
+        start = org.start_char
+        end = orgs[i + 1].start_char if i + 1 < len(orgs) else len(doc_text)
+        blocks.append((org, start, end))
+    return blocks
+
+
 def divide_body_by_org_and_docs(
     doc_body,
     serieIII_json_or_path: Any,
@@ -171,34 +257,31 @@ def divide_body_by_org_and_docs(
     write_org_files: bool = False,
     write_doc_files: bool = False,
     out_dir: Path | str = "output_docs",
-    file_prefix: str = "serieIII"
+    file_prefix: str = "serieIII",
+    verbose: bool = False,
 ) -> Tuple[List[OrgBlockResult], Dict[str, Any]]:
     """
-    Segment the labeled body into ORG blocks, then slice per document header inside each block
-    using only labeled anchors (no regex body search). Cross-check with the JSON export.
-
-    Returns (results, summary)
+    Build ORG blocks only from JSON-listed ORGs (with coalesced adjacent ORG lines, matched via _org_key),
+    then slice within each block by DOC_NAME_LABEL, matching JSON docs sequentially (supports repeated headers).
     """
     data = coerce_items_payload(serieIII_json_or_path)
     items = data.get("items", [])
 
-    # Index spans
-    spans = _collect_spans(doc_body)
+    # Index spans / text
+    spans = _collect_spans(doc_body)  # JUNK_LABEL already excluded
     doc_text = doc_body.text
-    # Build the set of JSON ORG names (normalized)
-    json_org_set = {normalize_text(item.get("org", {}).get("text", "")) for item in items}
-    org_blocks = _build_org_blocks_filtered(doc_text, spans, json_org_set)
 
-   
+    # Aggressive ORG keys for robust matching (spaces/accents/punct-insensitive)
+    json_org_keys = {_org_key(item.get("org", {}).get("text", "")) for item in items}
 
-    # Build lookup for body orgs by normalized text
+    # Single strategy: JSON-aligned, coalesced ORG anchors (uses _org_key inside)
+    org_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, json_org_keys)
+
+    # Build lookup for body orgs by aggressive _org_key (keep first occurrence)
     body_org_lookup: Dict[str, Tuple[SpanInfo, int, int]] = {}
     for org_span, bstart, bend in org_blocks:
-        key = normalize_text(org_span.text)
-        # If duplicates occur, keep the first; segmentation is by order anyway
-        body_org_lookup.setdefault(key, (org_span, bstart, bend))
+        body_org_lookup.setdefault(_org_key(org_span.text), (org_span, bstart, bend))
 
-    # Pre-collect docname anchors per block for quick slicing
     results: List[OrgBlockResult] = []
 
     total_orgs = len(items)
@@ -213,70 +296,74 @@ def divide_body_by_org_and_docs(
 
     for idx, item in enumerate(items, start=1):
         json_org_text_raw = item.get("org", {}).get("text", "")
-        json_org_text = normalize_text(json_org_text_raw)
+        json_org_key = _org_key(json_org_text_raw)
 
         # Gather JSON docs
         json_docs = item.get("docs", [])
         json_doc_names = [normalize_text(d.get("text", "")) for d in json_docs]
         total_docs_expected += len(json_doc_names)
 
-        if json_org_text in body_org_lookup:
-            org_span, bstart, bend = body_org_lookup[json_org_text]
+        if json_org_key in body_org_lookup:
+            org_span, bstart, bend = body_org_lookup[json_org_key]
             block_text = doc_text[bstart:bend]
 
-            # Doc-name anchors inside this block (ordered)
-            docname_spans = _spans_within(spans, bstart, bend, labels={DOC_NAME_LABEL})
-            # Map normalized header text -> list of spans (to handle duplicates gracefully)
-            header_map: Dict[str, List[SpanInfo]] = {}
-            for dn in docname_spans:
-                key = normalize_text(dn.text)
-                header_map.setdefault(key, []).append(dn)
+            # Ordered DOC_NAME anchors inside this block (sequential matching supports repeats)
+            docname_spans_sorted = sorted(
+                _spans_within(spans, bstart, bend, labels={DOC_NAME_LABEL}),
+                key=lambda s: s.start_char
+            )
 
-            # For each JSON doc, try to match and slice
             matched_slices: List[DocSlice] = []
             unmatched_docs: List[str] = []
 
-            # Sort all docname spans by start_char for slicing
-            docname_spans_sorted = sorted(docname_spans, key=lambda s: s.start_char)
-
-            # Helper to compute slice end
+            # End of slice: next DOC header start or block end
             def _slice_end(start_char: int) -> int:
                 for s in docname_spans_sorted:
                     if s.start_char > start_char:
                         return s.start_char
                 return bend
 
+            # Sequential pointer over body headers
+            i = 0
+
+            # Iterate JSON docs in order; for duplicates, match the next occurrence
             for jdoc_raw, jdoc_norm in zip([d.get("text", "") for d in json_docs], json_doc_names):
-                spans_for_header = header_map.get(jdoc_norm, [])
-                if spans_for_header:
-                    head_span = spans_for_header.pop(0)  # consume the first occurrence
+                while i < len(docname_spans_sorted) and normalize_text(docname_spans_sorted[i].text) != jdoc_norm:
+                    i += 1
+                if i < len(docname_spans_sorted):
+                    head_span = docname_spans_sorted[i]
                     start = head_span.start_char
                     end = _slice_end(start)
-                    text_slice = doc_text[start:end]
-                    matched_slices.append(DocSlice(doc_name=_strip_markdown_bold(jdoc_raw).strip(), text=text_slice))
+                    matched_slices.append(
+                        DocSlice(doc_name=_strip_markdown_bold(jdoc_raw).strip(),
+                                 text=doc_text[start:end])
+                    )
+                    i += 1
                 else:
                     unmatched_docs.append(jdoc_raw)
 
             # Determine status
-            if matched_slices and unmatched_docs:
-                status = "partial"
-                org_partial += 1
-            elif not matched_slices and json_doc_names:
-                status = "doc_missing"
-                org_doc_missing += 1
-            else:
+            if len(json_doc_names) == 0:
                 status = "ok"
-                org_ok += 1
+            elif matched_slices and unmatched_docs:
+                status = "partial"; org_partial += 1
+                if verbose:
+                    print(f"[INFO] ORG partial: {json_org_text_raw!r}; matched={len(matched_slices)}, missing={len(unmatched_docs)}")
+            elif not matched_slices and json_doc_names:
+                status = "doc_missing"; org_doc_missing += 1
+                if verbose:
+                    print(f"[WARN] No docs matched for ORG: {json_org_text_raw!r}")
+            else:
+                status = "ok"; org_ok += 1
 
             total_docs_matched += len(matched_slices)
 
-            org_result = OrgBlockResult(
+            results.append(OrgBlockResult(
                 org=_strip_markdown_bold(json_org_text_raw).strip(),
                 org_block_text=block_text,
                 docs=matched_slices,
                 status=status,
-            )
-            results.append(org_result)
+            ))
 
             # Optional writing
             if write_org_files:
@@ -298,10 +385,10 @@ def divide_body_by_org_and_docs(
                         f.write(f"DOC: {ds.doc_name}\n")
                         f.write(ds.text)
                         f.write("\nDOC_END\n")
-
         else:
-            # ORG missing in body labels
             org_missing += 1
+            if verbose:
+                print(f"[WARN] ORG from JSON not found in body: {json_org_text_raw!r}")
             results.append(OrgBlockResult(
                 org=_strip_markdown_bold(json_org_text_raw).strip(),
                 org_block_text="",
@@ -318,8 +405,9 @@ def divide_body_by_org_and_docs(
         "docs_expected": total_docs_expected,
         "docs_matched": total_docs_matched,
     }
-
     return results, summary
+
+
 
 
 # --------------------------------------------------------------------------------------
