@@ -341,17 +341,19 @@ def export_serieIII_json_grouped(relations: Iterable[Relation], path: str) -> No
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str) -> None:
+from typing import Iterable, List, Optional
+from collections import OrderedDict
+import json  # only needed if you later want a JSON string
+
+def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
     """
-    Compact III Série exporter:
+    Compact III Série builder (returns a Python dict):
       - Top-level "orgs": [{id, text, label}]
       - Items: { paragraph_id, org_ids: [id...], doc_name (or None), bodies: [...] }
       - Supports both:
           * DOC_NAME path: DOC_NAME→(DOC_TEXT|PARAGRAPH)
           * Mode A fallback: ORG→(DOC_TEXT|PARAGRAPH) when no DOC_NAME
     """
-    from collections import OrderedDict
-
     # 1) Bucket by paragraph
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
     for r in relations:
@@ -409,8 +411,8 @@ def export_serieIII_items_minimal_json(relations: Iterable[Relation], path: str)
         items.append(item)
 
     payload = {"orgs": orgs_out, "items": items}
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return payload
+
 
 
 

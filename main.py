@@ -7,13 +7,14 @@ from Split_TEXT import split_sumario_and_body
 from relations_extractor import RelationExtractor, export_relations_items_minimal_json
 from relations_extractor_serieIII import RelationExtractorSerieIII, export_serieIII_items_minimal_json
 
-from body_extraction import divide_body_by_org_and_docs, print_summary
+from body_extraction import divide_body_by_org_and_docs
+from body_extractionIII import divide_body_by_org_and_docs_serieIII
 import html as html_lib
 
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IISerie-040-2005-02-25Supl.pdf"
+PDF_NAME = "IIISerie-06-2006-03-17.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()
@@ -43,7 +44,9 @@ rels = rex.extract(doc_sumario)
 
 
 if is_serieIII:
-    export_serieIII_items_minimal_json(rels, "relations.items.minimal.json")
+    payload = export_serieIII_items_minimal_json(rels)
+    results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload)
+
 else:  
     payload = export_relations_items_minimal_json(rels, path = None)
 
@@ -57,9 +60,9 @@ else:
 
 
 print(f"Payload:", payload)
-print(f"Summary", summary)
-print()
-print(f"Results:", results)
+#print(f"Summary", summary)
+#print()
+#print(f"Results:", results)
 html = displacy.render(doc_body, style="ent", jupyter=False, options= OPTIONS)
 
 
