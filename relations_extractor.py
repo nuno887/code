@@ -7,6 +7,7 @@ from collections import defaultdict, OrderedDict
 import json
 import csv
 from spacy.tokens import Doc, Span
+from typing import Iterable, Optional, Union, List, Dict
 
 # ---- Labels we care about ----------------------------------------------------
 Label = Literal[
@@ -447,14 +448,22 @@ def export_relations_csv(relations: Iterable[Relation], path: str) -> None:
             })
 
 
-def export_relations_items_minimal_json(relations: Iterable[Relation], path: str) -> None:
+def export_relations_items_minimal_json(
+    relations: Iterable[Relation],
+    path: Optional[str] = None
+) -> Union[Dict[str, Any], str]:
     """
     Export as minimal hierarchical 'items' (Option D):
       - Non-star paragraph -> { paragraph_id, org, docs[] }
       - Star paragraph     -> { paragraph_id, top_org, sub_orgs[ {org, docs[]} ] }
     Fields keep only {text, label} to stay compact.
 
-    Example:
+    If `path` is None:
+      - Returns the JSON payload as a Python dict (and does NOT write to disk).
+    If `path` is a string:
+      - Writes the JSON to the given path and returns that path.
+
+    Example payload:
     {
       "items": [
         {
@@ -476,6 +485,7 @@ def export_relations_items_minimal_json(relations: Iterable[Relation], path: str
     }
     """
     from collections import OrderedDict
+    import json
 
     # Group relations by paragraph_id preserving insertion order
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
@@ -537,9 +547,13 @@ def export_relations_items_minimal_json(relations: Iterable[Relation], path: str
             })
             continue
 
-        # Fallback: no ORG→DOC_NAME found (rare). Skip or capture empty shell.
-        # Here we skip to keep the output clean.
+        # Fallback: no ORG→DOC_NAME found (rare). Skip to keep the output clean.
 
     payload = {"items": items}
+
+    if path is None:
+        return payload
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    return path

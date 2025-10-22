@@ -3,12 +3,20 @@
     {
       "paragraph_id": 0,
       "org": {
-        "text": "S E C R E TA R I AR E G I O N A L DO TURISMO E CULT U R A",
+        "text": "SECRETARIA REGIONAL DE EDUCAÇÃO, CIÊNCIA E TECNOLOGIA",
         "label": "ORG_LABEL"
       },
       "docs": [
         {
-          "text": "**Av i s o**",
+          "text": "**Aviso n.º 167/2025**",
+          "label": "DOC_NAME_LABEL"
+        },
+        {
+          "text": "**Aviso n.º 168/2025**",
+          "label": "DOC_NAME_LABEL"
+        },
+        {
+          "text": "**Aviso n.º 169/2025**",
           "label": "DOC_NAME_LABEL"
         }
       ]
@@ -16,258 +24,17 @@
     {
       "paragraph_id": 1,
       "org": {
-        "text": "S E C R E TA R I AR E G I O N A LD AE D U C A Ç Ã O",
+        "text": "SECRETARIA REGIONAL DAS FINANÇAS",
         "label": "ORG_LABEL"
       },
       "docs": [
         {
-          "text": "**Av i s o**",
+          "text": "**Despacho n.º 496/2025**",
           "label": "DOC_NAME_LABEL"
-        }
-      ]
-    },
-    {
-      "paragraph_id": 2,
-      "org": {
-        "text": "S E C R E TA R I AR E G I O N A L DO AMBIENTE E DOS RECURSOS NAT U R A I S",
-        "label": "ORG_LABEL"
-      },
-      "docs": [
+        },
         {
-          "text": "**Av i s o**",
+          "text": "**Louvor n.º 39/2025**",
           "label": "DOC_NAME_LABEL"
-        }
-      ]
-    },
-    {
-      "paragraph_id": 3,
-      "org": {
-        "text": "SOCIEDADE DE DESENVOLV I M E N TO DO PORTO SANTO, S.A",
-        "label": "ORG_LABEL"
-      },
-      "docs": [
-        {
-          "text": "**Anúncio de concurso**",
-          "label": "DOC_NAME_LABEL"
-        }
-      ]
-    },
-    {
-      "paragraph_id": 4,
-      "top_org": {
-        "text": "**CONSERVATÓRIA DO REGISTO COMERCIAL DE CÂMARADE LOBOS**",
-        "label": "ORG_WITH_STAR_LABEL"
-      },
-      "sub_orgs": [
-        {
-          "org": {
-            "text": "AGOSTINHO & ORLANDO, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Renúncia do gere n t e s**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "paragraph_id": 5,
-      "top_org": {
-        "text": "**C O N S E RVAT Ó R I A DO REGISTO COMERCIALDO FUNCHAL**",
-        "label": "ORG_WITH_STAR_LABEL"
-      },
-      "sub_orgs": [
-        {
-          "org": {
-            "text": "A S S I S T E L - COMUNICAÇÕES, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Alteração de pacto social**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "LONG BEACH - INVESTIMENTOS IMOBILIÁRIOS, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Contrato de sociedade**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "M A R I A & SELENE, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Contrato de sociedade**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "R E S TAURANTE SNACK - BAR MARISQUEIRAD AAJUDA, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Alteração de pacto social**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "TOQUE ORIENTA L - A RTIGOS DECORATIVOS, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Contrato de sociedade**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "paragraph_id": 6,
-      "top_org": {
-        "text": "**C O N S E RVAT Ó R I A DO REGISTO COMERCIALDE SANTA C R U Z**",
-        "label": "ORG_WITH_STAR_LABEL"
-      },
-      "sub_orgs": [
-        {
-          "org": {
-            "text": "ALEIXO & A LVES, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Alteração de pacto social**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "DRULOFER - SOCIEDADE DE EQUIPA M E N TOS DAMADEIRA, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Nomeação de membros dos conselhos fiscal e de administração**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "GÉNESE - S.G.P.S., S.A.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Renúncia de fiscais único e suplente**",
-              "label": "DOC_NAME_LABEL"
-            },
-            {
-              "text": "**Nomeação de fiscais único e suplente**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "J U V E N A LF R E I TAS - TÁXI UNIPESSOAL, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Alteração de pacto social**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "M A D E I R A - RENT, SOCIEDADE DE ALUGUER DE AUTOMÓVEIS, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Nomeação de gerente**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "MOVIMES - MÓVEIS & ARTESANATO, LDA.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Dissolução encerramento da liquidação da sociedade**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "PSICIVIL - SOCIEDADE DE CONSTRUÇÕES, S.A.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Renúncia de fiscais único e suplente**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "PSIPRO - GESTÃO, ENGENHARIA E PLANEAMENTO IMOBILIÁRIO, S.A.",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Renúncia de fiscal único e suplente**",
-              "label": "DOC_NAME_LABEL"
-            },
-            {
-              "text": "**Nomeação de fiscais único e suplente**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
-        },
-        {
-          "org": {
-            "text": "RIU HOTELS, S.A. - SUCURSAL EM PORTUGAL",
-            "label": "ORG_LABEL"
-          },
-          "docs": [
-            {
-              "text": "**Revogação de mandato de procurador**",
-              "label": "DOC_NAME_LABEL"
-            },
-            {
-              "text": "**Nomeação de procuradores**",
-              "label": "DOC_NAME_LABEL"
-            }
-          ]
         }
       ]
     }

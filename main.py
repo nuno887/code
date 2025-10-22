@@ -7,10 +7,13 @@ from Split_TEXT import split_sumario_and_body
 from relations_extractor import RelationExtractor, export_relations_items_minimal_json
 from relations_extractor_serieIII import RelationExtractorSerieIII, export_serieIII_items_minimal_json
 
+from body_extraction import divide_body_by_org_and_docs, print_summary
+import html as html_lib
+
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IISerie-128-2005-07-06.pdf"
+PDF_NAME = "IISerie-108-2025-06-18Supl.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()
@@ -42,12 +45,21 @@ rels = rex.extract(doc_sumario)
 if is_serieIII:
     export_serieIII_items_minimal_json(rels, "relations.items.minimal.json")
 else:  
-    export_relations_items_minimal_json(rels, "relations.items.minimal.json")
+    payload = export_relations_items_minimal_json(rels, path = None)
+
+    results, summary = divide_body_by_org_and_docs(
+        doc_body,
+        payload,
+        write_org_files = False,
+        write_doc_files = False
+    )
 
 
 
-
-
+print(f"Payload:", payload)
+print(f"Summary", summary)
+print()
+print(f"Results:", results)
 html = displacy.render(doc_body, style="ent", jupyter=False, options= OPTIONS)
 
 
@@ -67,3 +79,23 @@ Path("ents.html").write_text(full_html, encoding="utf-8")
 
 
 print("Saved entity visualization to ents.html")
+
+# NEW: minimal HTML dump of `results`
+lines = [
+    "<!doctype html>",
+    "<meta charset='utf-8'>",
+    "<title>Results</title>",
+    "<body style='font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:24px'>",
+    "<h1>Resultados</h1>",
+]
+for i, orgres in enumerate(results, start=1):
+    lines.append(f"<h2>{i:02d}. {html_lib.escape(orgres.org)} <small>[{orgres.status}]</small></h2>")
+    if not orgres.docs:
+        lines.append("<p><em>Sem documentos neste bloco.</em></p>")
+    for j, ds in enumerate(orgres.docs, start=1):
+        lines.append(f"<h3>{i:02d}.{j:02d} — {html_lib.escape(ds.doc_name)}</h3>")
+        lines.append(f"<pre style='white-space:pre-wrap'>{html_lib.escape(ds.text)}</pre>")
+lines.append("</body>")
+
+Path("results.html").write_text("\n".join(lines), encoding="utf-8")
+print("Wrote results.html")
