@@ -2,6 +2,7 @@ from pathlib import Path
 import spacy
 from spacy import displacy
 from Entities import setup_entities, OPTIONS
+
 from Split_TEXT import split_sumario_and_body
 
 from relations_extractor import RelationExtractor, export_relations_items_minimal_json

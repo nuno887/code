@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+import spacy
+from spacy import displacy
+from Entities import setup_entities
+
+nlp = spacy.load("pt_core_news_lg", exclude = "ner")
+setup_entities(nlp)
 
 # seg_text lost the spacy ents
 
