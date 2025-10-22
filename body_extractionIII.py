@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+
+# seg_text lost the spacy ents
+
 # ==========================
 # Data models expected upstream
 # ==========================
