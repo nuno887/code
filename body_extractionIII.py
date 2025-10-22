@@ -86,8 +86,8 @@ def divide_body_by_org_and_docs_serieIII(doc_body, payload: Dict[str, Any], debu
                     end = org_windows[win_for_item]["end"]
             else:
                 end = len(doc_body.text)
-
-            seg_text = doc_body.text[start:end]
+            content_start = mt.get("end", start)
+            seg_text = doc_body.text[content_start:end]
             org_result.docs.append(
                 DocSlice(
                     doc_name=title,
