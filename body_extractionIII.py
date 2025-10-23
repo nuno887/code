@@ -11,8 +11,6 @@ import unicodedata
 nlp = spacy.load("pt_core_news_lg", exclude="ner")
 setup_entities(nlp)
 
-# seg_text lost the spacy ents
-
 
 # ==========================
 # Data models expected upstream
@@ -52,7 +50,6 @@ class OrgResult:
 def divide_body_by_org_and_docs_serieIII(
     doc_body,
     payload: Dict[str, Any],
-    debug: bool = False,
     *,
     reparse_segments: bool = True,
     subdivide_children: bool = True,
@@ -62,49 +59,26 @@ def divide_body_by_org_and_docs_serieIII(
       1) Anchor top-level items to DOC_NAME_LABEL in body within org windows.
       2) Slice body into per-item segments [content_start:end).
       3) (Optional) Reparse each segment and subdivide by payload-approved child headers.
-
-    This version only adds diagnostics; core logic unchanged.
     """
-
-    # --- local debug helpers (keep function self-contained) ---
-    def _dbg(enabled: bool, *parts):
-        if enabled:
-            print("[serieIII]", *parts)
-
-    def _ctx(txt: str, pos: int, radius: int = 80) -> str:
-        a = max(0, pos - radius)
-        b = min(len(txt), pos + radius)
-        return txt[a:b].replace("\n", " ")
 
     if not isinstance(payload, dict):
         return [], {"error": "invalid_payload"}
 
-    _dbg(debug, "START divide_body_by_org_and_docs_serieIII")
-    _dbg(debug, "payload_orgs:", len(payload.get("orgs", [])), "payload_items:", len(payload.get("items", [])))
-
     # 0) Build org map and windows
     org_map = _build_org_map(payload)  # {id: name}
-    _dbg(debug, "org_map:", org_map)
 
     _allowed_orgs = [(o.get("text") or "").strip() for o in payload.get("orgs", [])]
-    org_windows = _collect_org_windows_from_ents(doc_body, allowed_orgs=_allowed_orgs, debug=debug)
-    _dbg(debug, "org_windows:", [{"name": w["name"], "start": w["start"], "end": w["end"]} for w in org_windows])
+    org_windows = _collect_org_windows_from_ents(doc_body, allowed_orgs=_allowed_orgs)
 
     # 1) Match payload doc titles to body headers
-    doc_type_matches = _match_doc_type_headers(doc_body, payload, org_windows, debug=debug)
+    doc_type_matches = _match_doc_type_headers(doc_body, payload, org_windows)
     matched_count = sum(1 for v in doc_type_matches.values() if v is not None)
-    _dbg(debug, "[headers] matched:", matched_count, "/", len(doc_type_matches))
 
     # 2) Compute next boundaries per window
     next_bounds = _compute_next_bounds_per_window(doc_type_matches, org_windows)
-    _dbg(debug, "[next_bounds]:", {win: sorted(list(b.items())) for win, b in next_bounds.items()})
 
     # 3) Group items by org
     items_by_org = _group_items_by_org(payload)
-    _dbg(debug, "items_by_org keys:", {k: len(v) for k, v in items_by_org.items()})
-
-    # Coverage audit collector (debug only)
-    coverage_by_win: Dict[int, List[Tuple[int, int, str]]] = {}
 
     # 4) Build results
     results: List[OrgResult] = []
@@ -113,7 +87,6 @@ def divide_body_by_org_and_docs_serieIII(
     for org_id, org_name in org_map.items():
         win_idx, win_status = _match_org_to_window(org_name, org_windows)
         items = sorted(items_by_org.get(org_id, []), key=lambda it: (it.get("paragraph_id") is None, it.get("paragraph_id")))
-        _dbg(debug, f"ORG {org_id} → '{org_name}'", "win_idx:", win_idx, "status:", win_status, "items:", len(items))
 
         org_result = OrgResult(org=org_name, status=win_status, docs=[])
         for item in items:
@@ -123,7 +96,6 @@ def divide_body_by_org_and_docs_serieIII(
 
             mt = doc_type_matches.get(key)
             if mt is None:
-                _dbg(debug, "  [ITEM]", title, "→ NOT ANCHORED in body")
                 org_result.docs.append(
                     DocSlice(doc_name=title, text="", status="doc_type_unanchored", confidence=0.0)
                 )
@@ -143,27 +115,6 @@ def divide_body_by_org_and_docs_serieIII(
             content_start = header_end  # exclude header text from segment
             seg_text = doc_body.text[content_start:end]  # <-- seg_text is defined here
 
-            # Now it's safe to log using seg_text
-            _dbg(debug, "  [SLICE]",
-                 {"title": title, "win": win_for_item, "header_start": start,
-                  "header_end": header_end, "content_start": content_start,
-                  "end": end, "seg_len": len(seg_text)})
-            _dbg(debug, "    ctx @header_start:", "... " + _ctx(doc_body.text, start) + " ...")
-            _dbg(debug, "    ctx @content_start:", "... " + _ctx(doc_body.text, content_start) + " ...")
-            _dbg(debug, "    ctx @end         :", "... " + _ctx(doc_body.text, end) + " ...")
-
-            # quick guards
-            if content_start > end:
-                _dbg(debug, "    [WARN] content_start > end!", content_start, end)
-            if end > len(doc_body.text):
-                _dbg(debug, "    [WARN] end beyond doc len!", end, len(doc_body.text))
-            if len(seg_text) < 10:
-                _dbg(debug, "    [WARN] very small segment:", len(seg_text))
-
-            # coverage audit (debug)
-            if debug and win_for_item is not None:
-                coverage_by_win.setdefault(win_for_item, []).append((content_start, end, title))
-
             # Build base slice
             ds = DocSlice(
                 doc_name=title,
@@ -175,19 +126,11 @@ def divide_body_by_org_and_docs_serieIII(
             # --- Second pass (optional) ---
             if reparse_segments and seg_text.strip():
                 ds.ents = _reparse_seg_text(seg_text)
-                _dbg(debug, "    ents_in_seg:", len(ds.ents))
 
                 if subdivide_children:
-                    allowed = _allowed_child_titles_for_item(item, debug=debug)
-                    _dbg(debug, "    allowed_children:", list(allowed))
-
-                    subs = _subdivide_seg_text_by_allowed_headers(seg_text, allowed, debug=debug)
+                    allowed = _allowed_child_titles_for_item(item)
+                    subs = _subdivide_seg_text_by_allowed_headers(seg_text, allowed)
                     ds.subs = subs
-                    _dbg(debug, "    subslices:", len(ds.subs))
-                    for idx, sub in enumerate(ds.subs, start=1):
-                        _dbg(debug, f"      sub[{idx}] title:", sub.title,
-                             "headers:", sub.headers, "body_len:", len(sub.body),
-                             "range:", (sub.start, sub.end))
 
             org_result.docs.append(ds)
             total_slices += 1
@@ -203,25 +146,6 @@ def divide_body_by_org_and_docs_serieIII(
         "segment_reparsed": bool(reparse_segments),
         "segments_with_subdivisions": sum(len(d.subs) for r in results for d in r.docs),
     }
-
-    # Coverage audit (debug)
-    if debug:
-        _dbg(debug, "[coverage] doc len:", len(doc_body.text))
-        for win_idx, spans in coverage_by_win.items():
-            w = org_windows[win_idx]
-            _dbg(debug, f"[coverage] window {win_idx} '{w['name']}' [{w['start']}:{w['end']}] len={w['end']-w['start']}")
-            prev = w["start"]
-            for st, en, ttl in sorted(spans, key=lambda x: x[0]):
-                if st > prev:
-                    _dbg(debug, "  [GAP]", {"from": prev, "to": st, "len": st - prev, "after": ttl})
-                if st < prev:
-                    _dbg(debug, "  [OVERLAP]", {"st": st, "prev_end": prev, "len": prev - st, "title": ttl})
-                prev = max(prev, en)
-            if prev < w["end"]:
-                _dbg(debug, "  [TAIL_GAP]", {"from": prev, "to": w["end"], "len": w["end"] - prev})
-
-        _dbg(debug, "SUMMARY:", summary)
-        _dbg(debug, "END divide_body_by_org_and_docs_serieIII")
 
     return results, summary
 
@@ -244,9 +168,6 @@ def _char_ngrams(s: str, n: int = 3) -> set:
         return {s} if s else set()
     return {s[i:i+n] for i in range(len(s) - n + 1)}
 
-def _dbg(enabled: bool, *parts):
-    if enabled:
-        print("[serieIII]", *parts)
 
 def _build_org_map(payload: Dict[str, Any]) -> Dict[int, str]:
     out: Dict[int, str] = {}
@@ -288,7 +209,7 @@ def _tighten(s: str) -> str:
 
 
 
-def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] = None, debug: bool = False) -> List[Dict[str, Any]]:
+def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """
     Build windows from ORG_LABEL ents, but ONLY keep ones that really match a payload org.
     Matching strategy:
@@ -319,7 +240,6 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     cand_ents = [e for e in doc_body.ents if getattr(e, "label_", None) == "ORG_LABEL"]
 
     kept = []
-    dropped = []
     for e in cand_ents:
         cand_text = e.text
         cand_tight = tight(cand_text)
@@ -336,17 +256,6 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
 
         if tight_ok or overlap_ok:
             kept.append(e)
-        else:
-            dropped.append(e)
-
-    if debug:
-        from itertools import islice
-        def brief(e):
-            return (getattr(e, "label_", None), e.start_char, e.end_char, (e.text[:120] + ("…" if len(e.text) > 120 else "")).replace("\n"," "))
-        print("[serieIII]", "[org_windows] allowed_orgs:", allowed_orgs)
-        print("[serieIII]", "[org_windows] kept:", [brief(e) for e in islice(kept, 10)], f"{'(+'+str(len(kept)-10)+' more)' if len(kept)>10 else ''}")
-        if dropped:
-            print("[serieIII]", "[org_windows] dropped:", [brief(e) for e in islice(dropped, 10)], f"{'(+'+str(len(dropped)-10)+' more)' if len(dropped)>10 else ''}")
 
     windows: List[Dict[str, Any]] = []
     if kept:
@@ -358,14 +267,7 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     else:
         windows.append({"name": "(global)", "start": 0, "end": len(doc_body.text)})
 
-    if debug:
-        print("[serieIII]", "[org_windows] final:", [{"name": w["name"], "start": w["start"], "end": w["end"]} for w in windows])
-
     return windows
-
-
-
-
 
 
 
@@ -408,16 +310,28 @@ def _doc_type_key(item: Dict[str, Any]) -> Tuple[int, int, str]:
     return (pid if pid is not None else -1, hash(org_ids), title)
 
 
-def _match_doc_type_headers(doc_body, payload: Dict[str, Any], org_windows: List[Dict[str, Any]], debug: bool = False) -> Dict[Tuple[int, int, str], Optional[Dict[str, Any]]]:
+def _match_doc_type_headers(doc_body, payload: Dict[str, Any], org_windows: List[Dict[str, Any]]) -> Dict[Tuple[int, int, str], Optional[Dict[str, Any]]]:
     """
     For every payload doc-type title, try to find a matching DOC_NAME_LABEL entity in the body.
-    Matching logic:
-      1) exact match on normalized title
-      2) tight match (no spaces)
-      3) containment tolerance: longest title preference
-    Returns a dict: key(item) -> match dict or None
-    match dict: {"start": int, "end": int, "window_index": int, "confidence": float}
+    Matching logic (robust to case/accents/spacing):
+      1) exact normalized (case-insensitive)
+      2) tight match (remove spaces, case-insensitive)
+      3) letters-only exact (strip accents + non-alnum, lowercase)
+      4) letters-only containment (either contains the other) with length ratio
+    Returns: key(item) -> {"start","end","window_index","confidence"} or None
     """
+    def canon_norm(s: str) -> str:
+        # normalized title with case-insensitive comparison
+        return _normalize_title(s).casefold()
+
+    def canon_tight(s: str) -> str:
+        # remove spaces + casefold
+        return _tighten(_normalize_title(s)).casefold()
+
+    def canon_letters(s: str) -> str:
+        # strip accents + non-alnum and lowercase
+        return _letters_only(_normalize_title(s))
+
     # Build payload title variants
     payload_titles: List[Dict[str, Any]] = []
     for it in payload.get("items", []):
@@ -428,7 +342,9 @@ def _match_doc_type_headers(doc_body, payload: Dict[str, Any], org_windows: List
         payload_titles.append({
             "key": _doc_type_key(it),
             "title": title,
-            "tight": _tighten(title),
+            "norm":  canon_norm(title),
+            "tight": canon_tight(title),
+            "letters": canon_letters(title),
             "item": it,
         })
 
@@ -443,10 +359,11 @@ def _match_doc_type_headers(doc_body, payload: Dict[str, Any], org_windows: List
         body_titles.append({
             "ent": e,
             "title": text_norm,
-            "tight": _tighten(text_norm),
+            "norm":  canon_norm(text_norm),
+            "tight": canon_tight(text_norm),
+            "letters": canon_letters(text_norm),
         })
 
-    # Pass 1: exact space-normalized match
     matches: Dict[Tuple[int, int, str], Optional[Dict[str, Any]]] = {pt["key"]: None for pt in payload_titles}
     claimed_positions: set = set()  # (start_char, end_char)
 
@@ -456,56 +373,65 @@ def _match_doc_type_headers(doc_body, payload: Dict[str, Any], org_windows: List
         win_idx = _locate_window(start, org_windows)
         matches[pt_key] = {"start": start, "end": end, "window_index": win_idx, "confidence": confidence}
 
-    # Exact
+    # Pass 1: exact normalized (case-insensitive)
     for pt in payload_titles:
         for bt in body_titles:
-            if bt["title"] == pt["title"]:
-                if (bt["ent"].start_char, bt["ent"].end_char) in claimed_positions:
-                    continue
+            if (bt["ent"].start_char, bt["ent"].end_char) in claimed_positions:
+                continue
+            if bt["norm"] == pt["norm"] and bt["norm"]:
                 claim(pt["key"], bt["ent"], 1.0)
                 break
 
-    # Pass 2: tight match (no spaces)
+    # Pass 2: tight match (no spaces, case-insensitive)
     for pt in payload_titles:
         if matches[pt["key"]] is not None:
             continue
         for bt in body_titles:
             if (bt["ent"].start_char, bt["ent"].end_char) in claimed_positions:
                 continue
-            if bt["tight"] == pt["tight"] and bt["title"] and pt["title"]:
+            if bt["tight"] == pt["tight"] and bt["tight"]:
+                claim(pt["key"], bt["ent"], 0.95)
+                break
+
+    # Pass 3: letters-only exact (accent/spacing agnostic)
+    for pt in payload_titles:
+        if matches[pt["key"]] is not None:
+            continue
+        for bt in body_titles:
+            if (bt["ent"].start_char, bt["ent"].end_char) in claimed_positions:
+                continue
+            if bt["letters"] and bt["letters"] == pt["letters"]:
                 claim(pt["key"], bt["ent"], 0.9)
                 break
 
-    # Pass 3: containment tolerance — prefer longest title
-    # Allow either side to contain the other (space-normalized)
-    for pt in sorted(payload_titles, key=lambda x: len(x["title"]), reverse=True):
+    # Pass 4: letters-only containment with ratio (handles tails like missing colon, minor OCR)
+    _LETTERS_MIN_RATIO = 0.80
+    for pt in sorted(payload_titles, key=lambda x: len(x["letters"]), reverse=True):
         if matches[pt["key"]] is not None:
             continue
         best_bt = None
         best_score = 0.0
+        a = pt["letters"]
+        if not a:
+            continue
         for bt in body_titles:
             if (bt["ent"].start_char, bt["ent"].end_char) in claimed_positions:
                 continue
-            a = pt["title"]
-            b = bt["title"]
-            if not a or not b:
+            b = bt["letters"]
+            if not b:
                 continue
-            contains = a.startswith(b) or b.startswith(a) or (a in b) or (b in a)
-            if contains:
+            if a in b or b in a:
                 shorter = min(len(a), len(b))
-                longer = max(len(a), len(b))
-                score = shorter / longer if longer else 0.0
-                if score > best_score:
+                longer  = max(len(a), len(b))
+                score = (shorter / longer) if longer else 0.0
+                if score >= _LETTERS_MIN_RATIO and score > best_score:
                     best_score = score
                     best_bt = bt
-        if best_bt is not None and best_score >= 0.5:
-            claim(pt["key"], best_bt["ent"], 0.7 * best_score)
-
-    if debug:
-        matched = sum(1 for v in matches.values() if v is not None)
-        _dbg(True, f"[headers] matched: {matched}/{len(matches)}")
+        if best_bt is not None:
+            claim(pt["key"], best_bt["ent"], 0.8 * best_score)
 
     return matches
+
 
 
 def _locate_window(pos: int, windows: List[Dict[str, Any]]) -> Optional[int]:
@@ -565,7 +491,7 @@ def _reparse_seg_text(seg_text: str) -> List[Tuple[str, str, int, int]]:
     return out
 
 
-def _allowed_child_titles_for_item(item: Dict[str, Any], debug: bool = False) -> Set[str]:
+def _allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
     """
     Build the set of *allowed* child titles for this item from the payload.
 
@@ -634,14 +560,10 @@ def _allowed_child_titles_for_item(item: Dict[str, Any], debug: bool = False) ->
         dedup.add(k)
         out.add(t)
 
-    if debug:
-        _dbg(True, "      [_allowed_child_titles_for_item] collected:", out)
-
     return out
 
-## error problably here
 
-def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[str], debug: bool = False) -> List[SubSlice]:
+def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[str]) -> List[SubSlice]:
     """
     - Parse seg_text
     - Collapse consecutive DOC_NAME_LABEL into one header block
@@ -652,8 +574,6 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
     """
     doc = nlp(seg_text)
     ents = sorted(list(doc.ents), key=lambda e: e.start_char)
-    _dbg(debug, "      [subdivide] ents:", [(e.label_, e.start_char, e.end_char) for e in ents[:20]],
-         "... total:", len(ents))
 
     # group consecutive DOC_NAME_LABEL into blocks
     header_blocks: List[Dict[str, Any]] = []
@@ -685,18 +605,12 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
             "titles": [_normalize_title(h.text) for h in current_block],
         })
 
-    _dbg(debug, "      [subdivide] header_blocks:",
-         [{"titles": hb["titles"], "range": (hb["start"], hb["end"])} for hb in header_blocks])
-
     # approve blocks by payload titles
     approved: List[Dict[str, Any]] = []
     for hb in header_blocks:
         canon = _pick_canonical_from_block(hb["titles"], allowed_titles)
         if canon is not None:
             approved.append({**hb, "canonical": canon})
-
-    _dbg(debug, "      [subdivide] approved_blocks:",
-         [{"title": hb["canonical"], "range": (hb["start"], hb["end"])} for hb in approved])
 
     subs: List[SubSlice] = []
 
@@ -717,7 +631,6 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
             start=body_start,
             end=body_end
         ))
-        _dbg(debug, "      [subdivide] no approved → single sub from", body_start, "to", body_end)
         return subs
 
     for i, hb in enumerate(approved):
@@ -731,14 +644,12 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
             start=header_end,
             end=next_start
         ))
-        _dbg(debug, f"      [subdivide] sub[{i+1}] '{hb['canonical']}' body",
-             (header_end, next_start), "len:", len(body_text))
 
     return subs
 
 
 # Tunables (adjust if needed)
-_LETTERS_MIN_RATIO = 0.65    # min(short/long) for containment/prefix
+_LETTERS_MIN_RATIO = 0.80    # min(short/long) for containment/prefix
 _NGRAM_N            = 3      # character n-gram size
 _NGRAM_JACCARD_MIN  = 0.60   # fallback threshold for long noisy titles
 _MIN_LEN_FOR_NGRAMS = 20     # only use n-grams when strings are long enough
@@ -817,5 +728,3 @@ def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]
                     return best[0]
 
     return None
-
-

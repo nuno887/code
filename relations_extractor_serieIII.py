@@ -106,27 +106,14 @@ class RelationExtractorSerieIII:
             has_marker = any(e.label == "SERIE_III" for e in seq)  # injected only for Mode B paragraphs
             mode: Literal["A", "B"] = "B" if (has_org and has_marker) else "A"
 
-            if self.debug:
-                num_docname = sum(1 for e in seq if e.label == "DOC_NAME_LABEL")
-                num_bodies = sum(1 for e in seq if e.label in ("DOC_TEXT", "PARAGRAPH"))
-                self._dbg(
-                    f"pid={pid} mode={mode} ents={len(seq)} org={has_org} marker={has_marker} "
-                    f"doc_names={num_docname} bodies={num_bodies}"
-                )
-
             relations.extend(self._extract_block(doc_sumario, seq, pid, sent_id=None, mode=mode))
 
-        if self.debug:
-            self._dbg(f"TOTAL relations: {len(relations)}")
         return relations
 
 
 
 
     # --- internals ------------------------------------------------------------
-    def _dbg(self, *args):
-        if self.debug:
-            print("[serieIII]", *args)
 
     def _collect_entities(self, doc: Doc) -> List[EntitySpan]:
         """
@@ -194,8 +181,6 @@ class RelationExtractorSerieIII:
             pid = current_pid if current_pid >= 0 else None
             collected.append(EntitySpan.from_span(e, paragraph_id=pid, sent_id=None))
 
-        if self.debug:
-            self._dbg(f"Collected ents: {len(collected)} across {current_pid + 1 if current_pid >= 0 else 0} paragraphs")
         return collected
 
 
@@ -234,9 +219,6 @@ class RelationExtractorSerieIII:
                 org = next((e for e in seq if e.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL")), None)
                 bodies = [e for e in seq if e.label in ("DOC_TEXT", "PARAGRAPH")]
 
-                if self.debug:
-                    self._dbg(f"pid={paragraph_id} ModeA Fallback: org={'yes' if org else 'no'}, bodies={len(bodies)}")
-
                 if org is not None and bodies:
                     for b in bodies:
                         kind: RelKind = "ORG→DOC_TEXT" if b.label == "DOC_TEXT" else "ORG→PARAGRAPH"
@@ -248,8 +230,7 @@ class RelationExtractorSerieIII:
                             sent_id=sent_id,
                             evidence_text=doc.text[org.end:b.start].strip(),
                         ))
-                    if self.debug:
-                        self._dbg(f"pid={paragraph_id} ModeA Fallback: created {len(out)} ORG→BODY relations")
+
                     return out  # done for this paragraph
 
         # ---- Standard left-to-right scan (both modes)
@@ -288,11 +269,6 @@ class RelationExtractorSerieIII:
                 if head.label == "DOC_NAME_LABEL" and mode != "B":
                     break
 
-        if self.debug:
-            # quick count by kind to see what we actually created
-            from collections import Counter
-            c = Counter(r.kind for r in out)
-            self._dbg(f"pid={paragraph_id} standard-scan relations: total={len(out)} kinds={dict(c)}")
         return out
 
 
@@ -403,10 +379,10 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
         item: dict = {"paragraph_id": pid, "org_ids": org_ids}
         if doc_span is not None:
             item["doc_name"] = {"text": doc_span.text, "label": doc_span.label}
-            item["children"] = [{"child": b.text, "label": b.label} for b in bodies_docname]
+            item["children"] = [{"child": b.text, "label":'PARAGRAPH'} for b in bodies_docname]
         else:
             item["doc_name"] = None
-            item["children"] = [{"child": b.text, "label": b.label} for b in bodies_org]
+            item["children"] = [{"child": b.text, "label":'PARAGRAPH'} for b in bodies_org]
 
         items.append(item)
 

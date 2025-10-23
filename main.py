@@ -15,12 +15,12 @@ import html as html_lib
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IIISerie-08-2006-04-17.pdf"
+PDF_NAME = "IIISerie-13-2006-07-03.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()
 
-text = extract_pdf_to_markdown(pdf_path, crop_top_ratio=0.10, skip_last_page=True)
+text = extract_pdf_to_markdown(pdf_path, crop_top_ratio=0.10, skip_last_page=False)
 
 # 1) Load model
 nlp = spacy.load("pt_core_news_lg", exclude = "ner")
@@ -49,7 +49,7 @@ if is_serieIII:
 
     print(f"payload:", payload)
 
-    results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload, debug=True)
+    results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload)
 
 else:  
     payload = export_relations_items_minimal_json(rels, path = None)
@@ -63,7 +63,7 @@ else:
 
 
 
-print(f"Payload:", payload)
+#print(f"Payload:", payload)
 #print(f"Summary", summary)
 #print()
 #print(f"Results:", results)
