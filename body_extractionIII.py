@@ -239,17 +239,20 @@ def _tighten(s: str) -> str:
 
 def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] = None) -> List[Dict[str, Any]]:
     """
-    Build windows from ORG_LABEL ents, but ONLY keep ones that really match a payload org.
-    Matching strategy:
+    Build windows from header-like ents, but ONLY keep ones that really match a payload org.
+    Robust to cases where a single visual line is split across labels like ORG_LABEL and DOC_NAME_LABEL.
+
+    Matching strategy (unchanged):
       1) Tight containment (remove spaces) between payload org and candidate span.
       2) Else require >=2 shared tokens (casefolded) to avoid accidental matches on 'de/do/dos/da'.
     If none match, return a single global window.
+
+    NEW:
+      - Accept a run of adjacent header-like ents (labels in ACCEPT) with small gaps as one candidate span.
     """
     def norm(s: str) -> str:
         s = (s or "").strip()
-        # collapse whitespace runs
         s = " ".join(s.split())
-        # no markdown here, but keep consistent with rest of code:
         if s.startswith("**") and s.endswith("**") and len(s) >= 4:
             s = s[2:-2].strip()
         return s
@@ -264,38 +267,66 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     allowed_tight = [tight(o) for o in allowed_orgs]
     allowed_toksets = [toks(o) for o in allowed_orgs]
 
-    # Candidates in document
-    cand_ents = [e for e in doc_body.ents if getattr(e, "label_", None) == "ORG_LABEL"]
+    # --- NEW: merge adjacent header-like entities into larger candidates ---
+    ACCEPT = {"ORG_LABEL", "ORG_WITH_STAR_LABEL", "DOC_NAME_LABEL"}
+    MERGE_MAX_GAP = 3  # characters; small gaps (e.g., spaces, dash) still count as contiguous
 
-    kept = []
-    for e in cand_ents:
-        cand_text = e.text
+    ents_sorted = sorted(list(doc_body.ents), key=lambda e: e.start_char)
+    merged_spans: List[Tuple[int, int, str]] = []  # (start, end, text)
+
+    cur_start = None
+    cur_end = None
+    for e in ents_sorted:
+        lab = getattr(e, "label_", None)
+        if lab not in ACCEPT:
+            # flush current if open
+            if cur_start is not None:
+                merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
+                cur_start = cur_end = None
+            continue
+
+        if cur_start is None:
+            cur_start = e.start_char
+            cur_end = e.end_char
+        else:
+            # contiguous or near-contiguous?
+            gap = e.start_char - cur_end
+            if gap <= MERGE_MAX_GAP:
+                cur_end = max(cur_end, e.end_char)
+            else:
+                merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
+                cur_start = e.start_char
+                cur_end = e.end_char
+
+    if cur_start is not None:
+        merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
+
+    # Fallback: if no merged spans, behave like before (will yield global window below)
+    # Now filter merged spans to only those that look like allowed orgs
+    kept: List[Tuple[int, int, str]] = []
+    for (st, en, txt) in merged_spans:
+        cand_text = txt
         cand_tight = tight(cand_text)
         cand_tokset = toks(cand_text)
 
-        # 1) tight containment: handles letter-spaced OCR headers cleanly
-        tight_ok = any(
-            (a in cand_tight) or (cand_tight in a)
-            for a in allowed_tight
-        )
-
-        # 2) token overlap: demand at least 2 shared tokens with some payload org
+        tight_ok = any((a in cand_tight) or (cand_tight in a) for a in allowed_tight)
         overlap_ok = any(len(cand_tokset & a) >= 2 for a in allowed_toksets)
 
         if tight_ok or overlap_ok:
-            kept.append(e)
+            kept.append((st, en, cand_text))
 
     windows: List[Dict[str, Any]] = []
     if kept:
-        kept_sorted = sorted(kept, key=lambda e: e.start_char)
-        for i, e in enumerate(kept_sorted):
-            start = e.start_char
-            end = kept_sorted[i + 1].start_char if (i + 1) < len(kept_sorted) else len(doc_body.text)
-            windows.append({"name": e.text, "start": start, "end": end})
+        kept_sorted = sorted(kept, key=lambda t: t[0])
+        for i, (st, en, txt) in enumerate(kept_sorted):
+            start = st
+            end = kept_sorted[i + 1][0] if (i + 1) < len(kept_sorted) else len(doc_body.text)
+            windows.append({"name": txt, "start": start, "end": end})
     else:
         windows.append({"name": "(global)", "start": 0, "end": len(doc_body.text)})
 
     return windows
+
 
 
 
@@ -315,6 +346,11 @@ def _jaccard(a: set, b: set) -> float:
 def _match_org_to_window(org_name: str, org_windows: List[Dict[str, Any]]) -> Tuple[Optional[int], str]:
     if not org_windows:
         return None, "org_unanchored"
+
+    # If we only have a single global window, consider it anchored to avoid penalizing OCR/labeling noise.
+    if len(org_windows) == 1 and org_windows[0].get("name") == "(global)":
+        return 0, "org_anchored"
+
     best_idx = None
     best_score = -1.0
     a = _simple_token_set(org_name)
@@ -326,8 +362,9 @@ def _match_org_to_window(org_name: str, org_windows: List[Dict[str, Any]]) -> Tu
             best_score = sc
             best_idx = i
 
-    status = "org_anchored" if best_score > 0 else ("org_unanchored" if org_windows and org_windows[0]["name"] != "(global)" else "org_unanchored")
+    status = "org_anchored" if best_score > 0 else "org_unanchored"
     return best_idx, status
+
 
 
 def _doc_type_key(item: Dict[str, Any]) -> Tuple[int, int, str]:
