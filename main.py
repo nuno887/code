@@ -46,7 +46,7 @@ rels = rex.extract(doc_sumario)
 
 if is_serieIII:
     payload = export_serieIII_items_minimal_json(rels)
-    results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload)
+    results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload, debug=True)
 
 else:  
     payload = export_relations_items_minimal_json(rels, path = None)
@@ -91,15 +91,49 @@ lines = [
     "<title>Results</title>",
     "<body style='font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:24px'>",
     "<h1>Resultados</h1>",
+    f"<p><strong>Resumo:</strong> {html_lib.escape(str(summary))}</p>",
 ]
 for i, orgres in enumerate(results, start=1):
     lines.append(f"<h2>{i:02d}. {html_lib.escape(orgres.org)} <small>[{orgres.status}]</small></h2>")
     if not orgres.docs:
         lines.append("<p><em>Sem documentos neste bloco.</em></p>")
+        continue
+
     for j, ds in enumerate(orgres.docs, start=1):
         lines.append(f"<h3>{i:02d}.{j:02d} — {html_lib.escape(ds.doc_name)}</h3>")
-        lines.append(f"<pre style='white-space:pre-wrap'>{html_lib.escape(ds.text)}</pre>")
-lines.append("</body>")
 
+        # Show the full segment as before
+        lines.append("<details open>")
+        lines.append("<summary>Segmento completo</summary>")
+        lines.append(f"<pre style='white-space:pre-wrap'>{html_lib.escape(ds.text)}</pre>")
+        lines.append("</details>")
+
+        # If you want to inspect entities recovered in seg_text:
+        if getattr(ds, 'ents', None):
+            lines.append("<details>")
+            lines.append("<summary>Entidades no segmento (segunda passagem)</summary>")
+            lines.append("<ul>")
+            for (lbl, txt, st, en) in ds.ents:
+                lines.append(f"<li><code>{html_lib.escape(lbl)}</code> — {html_lib.escape(txt)} "
+                             f"<small>[{st}:{en}]</small></li>")
+            lines.append("</ul>")
+            lines.append("</details>")
+
+        # Render sub-slices (what we care about now)
+        if getattr(ds, 'subs', None):
+            lines.append("<h4>Subdivisões</h4>")
+            for k, sub in enumerate(ds.subs, start=1):
+                lines.append(f"<h5>{i:02d}.{j:02d}.{k:02d} — {html_lib.escape(sub.title)}</h5>")
+                if getattr(sub, 'headers', None):
+                    lines.append("<p><strong>Headers colapsados:</strong></p><ul>")
+                    for h in sub.headers:
+                        lines.append(f"<li>{html_lib.escape(h)}</li>")
+                    lines.append("</ul>")
+                lines.append(f"<pre style='white-space:pre-wrap'>{html_lib.escape(sub.body)}</pre>")
+        else:
+            lines.append("<p><em>Sem subdivisões para este segmento.</em></p>")
+
+lines.append("</body>")
 Path("results.html").write_text("\n".join(lines), encoding="utf-8")
 print("Wrote results.html")
+
