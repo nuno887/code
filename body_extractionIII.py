@@ -221,12 +221,12 @@ def _group_items_by_org(payload: Dict[str, Any]) -> Dict[int, List[Dict[str, Any
 
 def _normalize_title(s: str) -> str:
     s = s.strip()
-    # strip markdown ** around full string, if present
+    # remove surrounding ** if the whole string is bolded
     if s.startswith("**") and s.endswith("**") and len(s) >= 4:
         s = s[2:-2].strip()
     # collapse whitespace runs
     s = " ".join(s.split())
-    # drop trailing ':' if present
+    # drop trailing colon
     if s.endswith(":"):
         s = s[:-1].rstrip()
     return s
@@ -235,6 +235,7 @@ def _normalize_title(s: str) -> str:
 def _tighten(s: str) -> str:
     """Remove all spaces to tolerate OCR letter-spacing artifacts."""
     return s.replace(" ", "")
+
 
 
 def _collect_org_windows_from_ents(doc_body) -> List[Dict[str, Any]]:
@@ -452,46 +453,78 @@ def _reparse_seg_text(seg_text: str) -> List[Tuple[str, str, int, int]]:
 def _allowed_child_titles_for_item(item: Dict[str, Any], debug: bool = False) -> Set[str]:
     """
     Build the set of *allowed* child titles for this item from the payload.
-    Only these titles can start a new sub-slice inside the item's seg_text.
 
-    We consider multiple possible shapes to be robust:
-      - item['children'] = [{ 'doc_name': {'text': ...} }, {'text': ...}, ...]
-      - item['bodies'] entries that themselves carry 'doc_name' (future-proof)
-      - item['allowed_children'] = [ '...', ... ] (explicit list of strings)
-
+    Supports:
+      - item['allowed_children'] = [ "Title A", ... ]          # strings
+      - item['children'] = [
+            {"doc_name": {"text": "Title A"}},
+            {"text": "Title B"},
+            {"child": "<full paragraph possibly with newlines>", "label": "PARAGRAPH"},
+        ]
+      - item['bodies'][i].doc_name.text                        # future-proof
     Titles are normalized (strip **, collapse ws, drop trailing ':').
     """
     titles: Set[str] = set()
 
+    def _tight_key(s: str) -> str:
+        return _normalize_title(s).replace(" ", "").lower()
+
+    # 1) explicit list of strings
     for t in (item.get("allowed_children") or []):
         t_norm = _normalize_title(str(t))
         if t_norm:
             titles.add(t_norm)
 
+    # 2) children objects (various shapes)
     for ch in (item.get("children") or []):
-        if isinstance(ch, dict):
-            txt = None
-            if isinstance(ch.get("doc_name"), dict):
-                txt = (ch["doc_name"].get("text") or "")
-            if not txt:
-                txt = ch.get("text") or ""
-            t_norm = _normalize_title(txt)
+        if not isinstance(ch, dict):
+            continue
+
+        txt = ""
+
+        # preferred shape: {"doc_name": {"text": "..."}}
+        if isinstance(ch.get("doc_name"), dict) and ch["doc_name"].get("text"):
+            txt = ch["doc_name"]["text"]
+
+        # alt shape: {"text": "..."}
+        elif "text" in ch and ch.get("text"):
+            txt = ch["text"]
+
+        # your new shape: {"child": "<full paragraph>", "label": "PARAGRAPH"}
+        elif "child" in ch and ch.get("child"):
+            # take the first non-empty line as the title
+            raw = str(ch["child"])
+            txt = " ".join(raw.split())
+
+        t_norm = _normalize_title(txt or "")
+        if t_norm:
+            titles.add(t_norm)
+
+    # 3) bodies that might carry titles (future-proof)
+    for b in (item.get("bodies") or []):
+        if not isinstance(b, dict):
+            continue
+        if isinstance(b.get("doc_name"), dict) and b["doc_name"].get("text"):
+            t_norm = _normalize_title(b["doc_name"]["text"])
             if t_norm:
                 titles.add(t_norm)
 
-    for b in (item.get("bodies") or []):
-        if isinstance(b, dict):
-            txt = None
-            if isinstance(b.get("doc_name"), dict):
-                txt = (b["doc_name"].get("text") or "")
-            if txt:
-                t_norm = _normalize_title(txt)
-                if t_norm:
-                    titles.add(t_norm)
+    # dedupe loosely (OCR spacing)
+    dedup: Set[str] = set()
+    out: Set[str] = set()
+    for t in titles:
+        k = _tight_key(t)
+        if k in dedup:
+            continue
+        dedup.add(k)
+        out.add(t)
 
-    _dbg(debug, "      [_allowed_child_titles_for_item] collected:", titles)
-    return titles
+    if debug:
+        _dbg(True, "      [_allowed_child_titles_for_item] collected:", out)
 
+    return out
+
+## error problably here
 
 def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[str], debug: bool = False) -> List[SubSlice]:
     """
@@ -592,41 +625,62 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
 def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]) -> Optional[str]:
     """
     Choose the canonical title from a header block that matches one of the allowed titles.
-    Matching cascade:
+    Matching cascade (increasingly lenient):
       1) exact normalized
       2) tight (no spaces)
-      3) containment (short/long >= 0.5)
+      3) prefix match (either side startswith the other, normalized)
+      4) containment (substring either way, normalized)
+      5) token overlap (Jaccard >= 0.5) on normalized, lowercased tokens
     Return the allowed title (canonical) if matched, else None.
     """
     if not allowed_titles:
         return None
 
-    # Pass 1: exact normalized
-    allowed_norm = set(allowed_titles)
-    for bt in block_titles:
-        if bt in allowed_norm:
-            return bt
+    # Precompute normalized variants for allowed titles
+    allowed_norm = [(t, _normalize_title(t), _tighten(_normalize_title(t))) for t in allowed_titles]
 
-    # Build tight maps
-    allowed_tight_to_orig = { _tighten(orig): orig for orig in allowed_titles }
+    def toks(s: str) -> set:
+        return set(w for w in _normalize_title(s).lower().split() if w)
 
-    # Pass 2: tight (no spaces)
-    for bt in block_titles:
-        bt_t = _tighten(bt)
-        if bt_t in allowed_tight_to_orig:
-            return allowed_tight_to_orig[bt_t]
+    # Check each line in the header block against allowed titles
+    for bt_raw in block_titles:
+        bt = _normalize_title(bt_raw)
+        bt_tight = _tighten(bt)
+        bt_tokens = toks(bt)
 
-    # Pass 3: containment
-    for bt in block_titles:
-        for orig in allowed_titles:
-            a, b = bt, orig
-            if not a or not b:
-                continue
-            contains = a.startswith(b) or b.startswith(a) or (a in b) or (b in a)
-            if contains:
-                shorter = min(len(a), len(b))
-                longer = max(len(a), len(b))
+        # Pass 1: exact normalized
+        for orig, an, at in allowed_norm:
+            if bt == an:
+                return orig
+
+        # Pass 2: tight (no spaces)
+        for orig, an, at in allowed_norm:
+            if bt_tight == at:
+                return orig
+
+        # Pass 3: prefix match (normalized)
+        for orig, an, at in allowed_norm:
+            if bt.startswith(an) or an.startswith(bt):
+                # keep some minimal ratio so tiny prefixes don't match
+                shorter, longer = (len(bt), len(an)) if len(bt) < len(an) else (len(an), len(bt))
                 if longer and (shorter / longer) >= 0.5:
                     return orig
 
+        # Pass 4: containment (normalized)
+        for orig, an, at in allowed_norm:
+            if bt in an or an in bt:
+                shorter, longer = (len(bt), len(an)) if len(bt) < len(an) else (len(an), len(bt))
+                if longer and (shorter / longer) >= 0.5:
+                    return orig
+
+        # Pass 5: token overlap (Jaccard)
+        for orig, an, at in allowed_norm:
+            an_tokens = set(w for w in an.lower().split() if w)
+            if an_tokens:
+                inter = len(bt_tokens & an_tokens)
+                union = len(bt_tokens | an_tokens)
+                if union and (inter / union) >= 0.5:
+                    return orig
+
     return None
+

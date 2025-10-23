@@ -46,6 +46,9 @@ rels = rex.extract(doc_sumario)
 
 if is_serieIII:
     payload = export_serieIII_items_minimal_json(rels)
+
+    print(f"payload:", payload)
+
     results, summary = divide_body_by_org_and_docs_serieIII(doc_body, payload, debug=True)
 
 else:  

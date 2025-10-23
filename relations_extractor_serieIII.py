@@ -403,10 +403,10 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
         item: dict = {"paragraph_id": pid, "org_ids": org_ids}
         if doc_span is not None:
             item["doc_name"] = {"text": doc_span.text, "label": doc_span.label}
-            item["bodies"] = [{"text": b.text, "label": b.label} for b in bodies_docname]
+            item["children"] = [{"child": b.text, "label": b.label} for b in bodies_docname]
         else:
             item["doc_name"] = None
-            item["bodies"] = [{"text": b.text, "label": b.label} for b in bodies_org]
+            item["children"] = [{"child": b.text, "label": b.label} for b in bodies_org]
 
         items.append(item)
 
