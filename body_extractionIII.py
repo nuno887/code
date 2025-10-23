@@ -6,6 +6,7 @@ from spacy import displacy  # noqa: F401  (kept if you use it elsewhere)
 from Entities import setup_entities
 
 import unicodedata
+import re
 
 # Load Portuguese pipeline and your custom entity setup (keeps your original choice)
 nlp = spacy.load("pt_core_news_lg", exclude="ner")
@@ -646,6 +647,8 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
         ))
 
     return subs
+# ====================================================================================================
+
 
 
 # Tunables (adjust if needed)

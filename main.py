@@ -15,12 +15,12 @@ import html as html_lib
 
 from pdf_markup import extract_pdf_to_markdown
 
-PDF_NAME = "IIISerie-13-2006-07-03.pdf"
+PDF_NAME = "IIISerie-15-2006-08-01.pdf"
 pdf_path = Path("input_pdfs")/ PDF_NAME
 
 is_serieIII = "iiiserie" in PDF_NAME.lower()
 
-text = extract_pdf_to_markdown(pdf_path, crop_top_ratio=0.10, skip_last_page=False)
+text = extract_pdf_to_markdown(pdf_path, crop_top_ratio=0.10, skip_last_page=True)
 
 # 1) Load model
 nlp = spacy.load("pt_core_news_lg", exclude = "ner")
