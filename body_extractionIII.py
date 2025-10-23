@@ -5,6 +5,7 @@ import spacy
 from spacy import displacy  # noqa: F401  (kept if you use it elsewhere)
 from Entities import setup_entities
 
+import unicodedata
 
 # Load Portuguese pipeline and your custom entity setup (keeps your original choice)
 nlp = spacy.load("pt_core_news_lg", exclude="ner")
@@ -229,6 +230,20 @@ def divide_body_by_org_and_docs_serieIII(
 # ==========================
 # Helpers — NO REGEX
 # ==========================
+
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+def _letters_only(s: str) -> str:
+    # lower, strip accents, keep only a-z0-9
+    s = _strip_accents(s or "").lower()
+    return "".join(ch for ch in s if ("a" <= ch <= "z") or ("0" <= ch <= "9"))
+
+def _char_ngrams(s: str, n: int = 3) -> set:
+    if len(s) < n:
+        return {s} if s else set()
+    return {s[i:i+n] for i in range(len(s) - n + 1)}
+
 def _dbg(enabled: bool, *parts):
     if enabled:
         print("[serieIII]", *parts)
@@ -722,65 +737,85 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
     return subs
 
 
+# Tunables (adjust if needed)
+_LETTERS_MIN_RATIO = 0.65    # min(short/long) for containment/prefix
+_NGRAM_N            = 3      # character n-gram size
+_NGRAM_JACCARD_MIN  = 0.60   # fallback threshold for long noisy titles
+_MIN_LEN_FOR_NGRAMS = 20     # only use n-grams when strings are long enough
+
 def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]) -> Optional[str]:
     """
-    Choose the canonical title from a header block that matches one of the allowed titles.
-    Matching cascade (increasingly lenient):
-      1) exact normalized
+    Pick the *allowed* child title that best matches this header block.
+    Robust to OCR spacing, punctuation, hyphens, commas, accents.
+
+    Matching cascade:
+      1) exact normalized (space/punct aware as before)
       2) tight (no spaces)
-      3) prefix match (either side startswith the other, normalized)
-      4) containment (substring either way, normalized)
-      5) token overlap (Jaccard >= 0.5) on normalized, lowercased tokens
-    Return the allowed title (canonical) if matched, else None.
+      3) letters-only exact
+      4) letters-only prefix/containment with length ratio ≥ _LETTERS_MIN_RATIO
+      5) letters-only char n-gram Jaccard ≥ _NGRAM_JACCARD_MIN (for long strings)
     """
     if not allowed_titles:
         return None
 
-    # Precompute normalized variants for allowed titles
-    allowed_norm = [(t, _normalize_title(t), _tighten(_normalize_title(t))) for t in allowed_titles]
+    # Precompute forms for allowed titles
+    prepared_allowed = []
+    for t in allowed_titles:
+        t_norm  = _normalize_title(t)
+        t_tight = _tighten(t_norm)
+        t_letters = _letters_only(t_norm)
+        prepared_allowed.append((t, t_norm, t_tight, t_letters))
 
-    def toks(s: str) -> set:
-        return set(w for w in _normalize_title(s).lower().split() if w)
-
-    # Check each line in the header block against allowed titles
+    # Check each line that composes the header block
     for bt_raw in block_titles:
-        bt = _normalize_title(bt_raw)
-        bt_tight = _tighten(bt)
-        bt_tokens = toks(bt)
+        bt_norm   = _normalize_title(bt_raw)
+        bt_tight  = _tighten(bt_norm)
+        bt_letters= _letters_only(bt_norm)
 
-        # Pass 1: exact normalized
-        for orig, an, at in allowed_norm:
-            if bt == an:
+        # 1) exact normalized
+        for orig, an, at, al in prepared_allowed:
+            if bt_norm == an:
                 return orig
 
-        # Pass 2: tight (no spaces)
-        for orig, an, at in allowed_norm:
-            if bt_tight == at:
+        # 2) tight (no spaces)
+        for orig, an, at, al in prepared_allowed:
+            if bt_tight == at and at:
                 return orig
 
-        # Pass 3: prefix match (normalized)
-        for orig, an, at in allowed_norm:
-            if bt.startswith(an) or an.startswith(bt):
-                # keep some minimal ratio so tiny prefixes don't match
-                shorter, longer = (len(bt), len(an)) if len(bt) < len(an) else (len(an), len(bt))
-                if longer and (shorter / longer) >= 0.5:
+        # 3) letters-only exact
+        for orig, an, at, al in prepared_allowed:
+            if bt_letters and bt_letters == al:
+                return orig
+
+        # 4) letters-only prefix/containment with ratio
+        for orig, an, at, al in prepared_allowed:
+            if not bt_letters or not al:
+                continue
+            if bt_letters in al or al in bt_letters:
+                shorter = min(len(bt_letters), len(al))
+                longer  = max(len(bt_letters), len(al))
+                if longer and (shorter / longer) >= _LETTERS_MIN_RATIO:
                     return orig
 
-        # Pass 4: containment (normalized)
-        for orig, an, at in allowed_norm:
-            if bt in an or an in bt:
-                shorter, longer = (len(bt), len(an)) if len(bt) < len(an) else (len(an), len(bt))
-                if longer and (shorter / longer) >= 0.5:
-                    return orig
-
-        # Pass 5: token overlap (Jaccard)
-        for orig, an, at in allowed_norm:
-            an_tokens = set(w for w in an.lower().split() if w)
-            if an_tokens:
-                inter = len(bt_tokens & an_tokens)
-                union = len(bt_tokens | an_tokens)
-                if union and (inter / union) >= 0.5:
-                    return orig
+        # 5) letters-only char n-gram Jaccard (for long strings)
+        if len(bt_letters) >= _MIN_LEN_FOR_NGRAMS:
+            bt_ngrams = _char_ngrams(bt_letters, _NGRAM_N)
+            if bt_ngrams:
+                best = (None, 0.0)
+                for orig, an, at, al in prepared_allowed:
+                    if len(al) < _MIN_LEN_FOR_NGRAMS:
+                        continue
+                    al_ngrams = _char_ngrams(al, _NGRAM_N)
+                    if not al_ngrams:
+                        continue
+                    inter = len(bt_ngrams & al_ngrams)
+                    union = len(bt_ngrams | al_ngrams)
+                    j = inter / union if union else 0.0
+                    if j >= _NGRAM_JACCARD_MIN and j > best[1]:
+                        best = (orig, j)
+                if best[0] is not None:
+                    return best[0]
 
     return None
+
 
