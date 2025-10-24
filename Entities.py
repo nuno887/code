@@ -22,7 +22,8 @@ RULER_PATTERNS = [
 {"label": "Sumario", "pattern": "**Sumário**"},
 {"label": "Sumario", "pattern": "**Sumario**"},
 {"label": "SERIE_III", "pattern": "Direção Regional do Trabalho"},
-{"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"}
+{"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"},
+{"label": "JUNK_LABEL", "pattern": "SECRETARI"}
 
 ]
 

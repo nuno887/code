@@ -65,33 +65,48 @@ def subdivide_seg_text_by_allowed_headers(nlp, seg_text: str, allowed_titles: Se
 
     header_blocks: List[Dict[str, Any]] = []
     current_block: List[Any] = []
+
+    def _flush_block():
+        nonlocal current_block
+        if current_block:
+            start = current_block[0].start_char
+            end = current_block[-1].end_char
+            header_blocks.append({
+                "headers": current_block[:],
+                "start": start,
+                "end": end,
+                "titles": [_normalize_title(h.text) for h in current_block],
+            })
+            current_block = []
+
+    last_header_end: Optional[int] = None
+
     for e in ents:
         if getattr(e, "label_", None) == "DOC_NAME_LABEL":
             if current_block:
-                current_block.append(e)
+                # If there is non-whitespace text between the last header and this one,
+                # the previous block should be closed and a new one started.
+                gap_has_text = False
+                gap_start = current_block[-1].end_char
+                gap_end = e.start_char
+                if gap_end > gap_start:
+                    gap_has_text = bool(seg_text[gap_start:gap_end].strip())
+
+                if gap_has_text:
+                    _flush_block()
+                    current_block = [e]
+                else:
+                    # Still in the same logical header block (e.g., multiline header)
+                    current_block.append(e)
             else:
                 current_block = [e]
+            last_header_end = e.end_char
         else:
-            if current_block:
-                start = current_block[0].start_char
-                end = current_block[-1].end_char
-                header_blocks.append({
-                    "headers": current_block[:],
-                    "start": start,
-                    "end": end,
-                    "titles": [_normalize_title(h.text) for h in current_block],
-                })
-                current_block = []
-    if current_block:
-        start = current_block[0].start_char
-        end = current_block[-1].end_char
-        header_blocks.append({
-            "headers": current_block[:],
-            "start": start,
-            "end": end,
-            "titles": [_normalize_title(h.text) for h in current_block],
-        })
+            # Seeing a non-header entity can also delimit the header block.
+            _flush_block()
 
+    _flush_block()
+    # --- the rest of your function stays the same ---
     approved: List[Dict[str, Any]] = []
     for hb in header_blocks:
         canon = pick_canonical_from_block(hb["titles"], allowed_titles)
@@ -129,5 +144,5 @@ def subdivide_seg_text_by_allowed_headers(nlp, seg_text: str, allowed_titles: Se
             start=header_end,
             end=next_start
         ))
-
     return subs
+

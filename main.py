@@ -25,6 +25,7 @@ from serie3_splitter.nlp import get_nlp
 from serie3_splitter import divide_body_by_org_and_docs_serieIII
 
 
+
 # -----------------------
 # Config knobs
 # -----------------------
@@ -171,7 +172,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IIISerie-19-2014-10-02.pdf",
+        default="IISerie-099-2005-05-23Supl.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()

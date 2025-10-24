@@ -28,6 +28,7 @@ def _org_key(s: str) -> str:
     """
     s = _strip_markdown_bold(s)
     s = _strip_accents(s)
+    s = s.replace("&", "E")
     s = re.sub(r"[^A-Za-z0-9]", "", s)
     return s.upper()
 
