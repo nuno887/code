@@ -41,9 +41,7 @@ def is_serie_iii(filename: str) -> bool:
 
 def load_text_from_pdf(pdf_path: Path) -> str:
     return extract_pdf_to_markdown(
-        pdf_path,
-        crop_top_ratio=CROP_TOP_RATIO,
-        skip_last_page=SKIP_LAST_PAGE,
+        pdf_path
     )
 
 
@@ -168,11 +166,11 @@ def render_results_html(results, summary, out_path: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Process a Serie I/II/III PDF.")
+    parser = argparse.ArgumentParser(description="Process a Serie I/II/III/IV PDF.")
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-099-2005-05-23Supl.pdf",
+        default="IISerie-003-2021-01-06.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -189,6 +187,10 @@ def main():
 
     # 2) Extract text and build docs
     text = load_text_from_pdf(pdf_path)
+
+    nlp.max_length = max(nlp.max_length, len(text)+1)
+
+
     doc, doc_sumario, doc_body, sumario_text, body_text, _meta = build_docs(nlp, text)
 
     # 3) Extract relations + payload
