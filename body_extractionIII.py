@@ -183,6 +183,44 @@ def divide_body_by_org_and_docs_serieIII(
 # Helpers — NO REGEX
 # ==========================
 
+import unicodedata, re
+
+_DOT_LEADER_RE = re.compile(r"[.\u2022·]{3,}")
+_HARD_LINEBR_RE = re.compile(r"(?:\r?\n)+")
+_HYPHEN_WRAP_RE = re.compile(r"-\s*(?:\r?\n|\n)\s*")
+# Collapses sequences of single-letter tokens back into a word:
+_INTERLETTER_SEQ_RE = re.compile(
+    r"(?i)\b(?:[A-Za-zÀ-ÿ]\s+){2,}[A-Za-zÀ-ÿ]\b"
+)
+
+def _normalize_unicode_spaces(s: str) -> str:
+    s = unicodedata.normalize("NFKC", s or "")
+    s = s.replace("\u00A0", " ")
+    return " ".join(s.split())
+
+def _remove_dot_leaders(s: str) -> str:
+    # strip long runs of dot leaders anywhere
+    return _DOT_LEADER_RE.sub("", s)
+
+def _fix_hyphen_linewraps(s: str) -> str:
+    # join hyphenated line wraps like "AES -\n Assoc." -> "AES Assoc."
+    return _HYPHEN_WRAP_RE.sub("", s)
+
+def _collapse_interletter_spacing(s: str) -> str:
+    # turn "T r a b a l h a d o res" into "Trabalhadores"
+    def _join(m):
+        return re.sub(r"\s+", "", m.group(0))
+    return _INTERLETTER_SEQ_RE.sub(_join, s)
+
+def _ocr_clean(s: str) -> str:
+    # Apply all OCR fixes in a safe order
+    s = _fix_hyphen_linewraps(s)
+    s = _remove_dot_leaders(s)
+    s = _collapse_interletter_spacing(s)
+    s = _normalize_unicode_spaces(s)
+    return s
+
+
 def _strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
@@ -640,6 +678,10 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
     doc = nlp(seg_text)
     ents = sorted(list(doc.ents), key=lambda e: e.start_char)
 
+    print("==================================")
+    print(f"Allowed titles:", allowed_titles)
+    print("==================================")
+
     # group consecutive DOC_NAME_LABEL into blocks
     header_blocks: List[Dict[str, Any]] = []
     current_block: List[Any] = []
@@ -723,49 +765,87 @@ _MIN_LEN_FOR_NGRAMS = 20     # only use n-grams when strings are long enough
 
 def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]) -> Optional[str]:
     """
-    Pick the *allowed* child title that best matches this header block.
-    Robust to OCR spacing, punctuation, hyphens, commas, accents.
-
-    Matching cascade:
-      1) exact normalized (space/punct aware as before)
-      2) tight (no spaces)
-      3) letters-only exact
-      4) letters-only prefix/containment with length ratio ≥ _LETTERS_MIN_RATIO
-      5) letters-only char n-gram Jaccard ≥ _NGRAM_JACCARD_MIN (for long strings)
+    Prefer matching the *whole block* (joined header lines) after OCR cleaning.
+    Fall back to per-line matching using the existing cascade.
     """
     if not allowed_titles:
         return None
 
-    # Precompute forms for allowed titles
+    # Precompute forms for allowed titles (with OCR cleaning)
     prepared_allowed = []
     for t in allowed_titles:
-        t_norm  = _normalize_title(t)
+        t_clean = _ocr_clean(t)
+        t_norm  = _normalize_title(t_clean)
         t_tight = _tighten(t_norm)
         t_letters = _letters_only(t_norm)
         prepared_allowed.append((t, t_norm, t_tight, t_letters))
 
-    # Check each line that composes the header block
-    for bt_raw in block_titles:
-        bt_norm   = _normalize_title(bt_raw)
-        bt_tight  = _tighten(bt_norm)
-        bt_letters= _letters_only(bt_norm)
+    # -------- BLOCK-LEVEL MATCH FIRST --------
+    block_join_raw = "\n".join(block_titles)
+    block_join = _ocr_clean(block_join_raw)
+    bj_norm   = _normalize_title(block_join)
+    bj_tight  = _tighten(bj_norm)
+    bj_letters= _letters_only(bj_norm)
 
-        # 1) exact normalized
+    # 1) exact normalized
+    for orig, an, at, al in prepared_allowed:
+        if bj_norm and bj_norm == an:
+            return orig
+    # 2) tight (no spaces)
+    for orig, an, at, al in prepared_allowed:
+        if bj_tight and bj_tight == at:
+            return orig
+    # 3) letters-only exact
+    for orig, an, at, al in prepared_allowed:
+        if bj_letters and bj_letters == al:
+            return orig
+    # 4) letters-only containment with ratio
+    for orig, an, at, al in prepared_allowed:
+        if not bj_letters or not al:
+            continue
+        if bj_letters in al or al in bj_letters:
+            shorter = min(len(bj_letters), len(al))
+            longer  = max(len(bj_letters), len(al))
+            if longer and (shorter / longer) >= _LETTERS_MIN_RATIO:
+                return orig
+    # 5) n-gram Jaccard (for long strings)
+    if len(bj_letters) >= _MIN_LEN_FOR_NGRAMS:
+        bj_ngrams = _char_ngrams(bj_letters, _NGRAM_N)
+        best = (None, 0.0)
+        for orig, an, at, al in prepared_allowed:
+            if len(al) < _MIN_LEN_FOR_NGRAMS:
+                continue
+            al_ngrams = _char_ngrams(al, _NGRAM_N)
+            if not al_ngrams:
+                continue
+            inter = len(bj_ngrams & al_ngrams)
+            union = len(bj_ngrams | al_ngrams)
+            j = inter / union if union else 0.0
+            if j >= _NGRAM_JACCARD_MIN and j > best[1]:
+                best = (orig, j)
+        if best[0] is not None:
+            return best[0]
+
+    # -------- FALL BACK: PER-LINE (existing cascade) --------
+    # Reuse the current logic but run OCR cleaning before normalizing
+    for bt_raw in block_titles:
+        bt_norm    = _normalize_title(_ocr_clean(bt_raw))
+        bt_tight   = _tighten(bt_norm)
+        bt_letters = _letters_only(bt_norm)
+
+        # exact normalized
         for orig, an, at, al in prepared_allowed:
             if bt_norm == an:
                 return orig
-
-        # 2) tight (no spaces)
+        # tight
         for orig, an, at, al in prepared_allowed:
-            if bt_tight == at and at:
+            if bt_tight and bt_tight == at:
                 return orig
-
-        # 3) letters-only exact
+        # letters-only exact
         for orig, an, at, al in prepared_allowed:
             if bt_letters and bt_letters == al:
                 return orig
-
-        # 4) letters-only prefix/containment with ratio
+        # containment with ratio
         for orig, an, at, al in prepared_allowed:
             if not bt_letters or not al:
                 continue
@@ -774,24 +854,23 @@ def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]
                 longer  = max(len(bt_letters), len(al))
                 if longer and (shorter / longer) >= _LETTERS_MIN_RATIO:
                     return orig
-
-        # 5) letters-only char n-gram Jaccard (for long strings)
+        # n-gram Jaccard
         if len(bt_letters) >= _MIN_LEN_FOR_NGRAMS:
             bt_ngrams = _char_ngrams(bt_letters, _NGRAM_N)
-            if bt_ngrams:
-                best = (None, 0.0)
-                for orig, an, at, al in prepared_allowed:
-                    if len(al) < _MIN_LEN_FOR_NGRAMS:
-                        continue
-                    al_ngrams = _char_ngrams(al, _NGRAM_N)
-                    if not al_ngrams:
-                        continue
-                    inter = len(bt_ngrams & al_ngrams)
-                    union = len(bt_ngrams | al_ngrams)
-                    j = inter / union if union else 0.0
-                    if j >= _NGRAM_JACCARD_MIN and j > best[1]:
-                        best = (orig, j)
-                if best[0] is not None:
-                    return best[0]
+            best = (None, 0.0)
+            for orig, an, at, al in prepared_allowed:
+                if len(al) < _MIN_LEN_FOR_NGRAMS:
+                    continue
+                al_ngrams = _char_ngrams(al, _NGRAM_N)
+                if not al_ngrams:
+                    continue
+                inter = len(bt_ngrams & al_ngrams)
+                union = len(bt_ngrams | al_ngrams)
+                j = inter / union if union else 0.0
+                if j >= _NGRAM_JACCARD_MIN and j > best[1]:
+                    best = (orig, j)
+            if best[0] is not None:
+                return best[0]
 
     return None
+
