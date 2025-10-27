@@ -56,12 +56,18 @@ def _leading_alpha_case_or_none(s: str):
 _list_start_rx = re.compile(
     r"""
     ^\s*
-    (?:[-•—–]            # dash/bullet
+    (?:[•—–]            # dash/bullet
      |\d+\s*[\)\.]       # 1) or 1.
     )
     """,
     re.VERBOSE,
 )
+
+# put near the other small helpers
+_ellipsis_eol_rx = re.compile(r"(?:…+|\.{3,})\s*$")
+def _ends_with_ellipsis(s: str) -> bool:
+    return bool(_ellipsis_eol_rx.search(s.strip()))
+
 
 def _looks_like_list_start(s: str) -> bool:
     """Detect simple list/bullet starts to avoid false merges."""
@@ -164,7 +170,7 @@ def paragraph_entity(doc):
                 # If current ends with . ! ? (or leader+page) but next starts lowercase, treat as wrapped continuation.
                 # NOTE: Leader+page considered a HARD stop at end-of-line by _ends_with_terminator;
                 # this lowercase exception should NOT override a forced split that already happened inside the same entity.
-                if ends_like_sentence and nxt_lead == 'lower':
+                if ends_like_sentence and nxt_lead == 'lower' and not _ends_with_ellipsis(last_piece):
                     ends_like_sentence = False
 
                 if ends_like_sentence:
