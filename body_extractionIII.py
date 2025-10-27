@@ -305,7 +305,7 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     allowed_tight = [tight(o) for o in allowed_orgs]
     allowed_toksets = [toks(o) for o in allowed_orgs]
 
-    # --- NEW: merge adjacent header-like entities into larger candidates ---
+    # merge adjacent header-like entities into larger candidates ---
     ACCEPT = {"ORG_LABEL", "ORG_WITH_STAR_LABEL", "DOC_NAME_LABEL"}
     MERGE_MAX_GAP = 3  # characters; small gaps (e.g., spaces, dash) still count as contiguous
 
