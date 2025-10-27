@@ -80,6 +80,12 @@ def _eligible_line(line: str) -> bool:
         and not _line_has_lowercase(line)
     )
 
+
+@Language.component("strip_junk_ents")
+def strip_junk_ents(doc):
+    doc.ents = tuple(e for e in doc.ents if e.label_ != "JUNK_LABEL")
+    return doc
+
 # --- REPLACE your allcaps_entity component with this ---
 @Language.component("allcaps_entity")
 def allcaps_entity(doc):
@@ -135,8 +141,16 @@ def allcaps_entity(doc):
                 run_start = line_start_idx
                 run_end = line_end_idx
         else:
-            # not eligible → break any open run
-            flush_run()
+            # not eligible
+            # If the line is blank/whitespace-only, keep the current run open
+            # so headings separated by empty lines are merged.
+            if stripped == "":
+                if run_label is not None:
+                    # extend the run to include this newline/whitespace
+                    run_end = line_end
+            else:
+                # real content that breaks the run → flush
+                flush_run()
 
         pos = line_end
 
@@ -147,6 +161,7 @@ def allcaps_entity(doc):
         from spacy.util import filter_spans
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
+
 
 
 # NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
@@ -257,9 +272,10 @@ def setup_entities(nlp):
     ruler = nlp.add_pipe("entity_ruler", first = True)
     ruler.add_patterns(RULER_PATTERNS)
     nlp.add_pipe("allcaps_entity")
-    nlp.add_pipe("docname_entity") 
-    nlp.add_pipe("junk_entity")
+    nlp.add_pipe("docname_entity")
+    # nlp.add_pipe("junk_entity")
     nlp.add_pipe("doc_text_entity")
+    # nlp.add_pipe("strip_junk_ents")
     nlp.add_pipe("paragraph_entity")
     
 

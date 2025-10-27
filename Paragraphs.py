@@ -6,7 +6,9 @@ import unicodedata
 TEXT_LABEL = "DOC_TEXT"
 PARAGRAPH_LABEL = "PARAGRAPH"
 
-_term_rx = re.compile(r"[.!?]\s*$")  # strong terminators at end
+# Treat ., !, ?, ellipsis, or long ... as a terminator,
+# AND allow optional spaces + page number (e.g., "................ 10") before end-of-line.
+_term_rx = re.compile(r"(?:[.!?]|…+|\.{3,})(?:\s*\d+[A-Za-z]?)?\s*$")  # strong terminators incl. leaders+page at end
 
 
 def _starts_with_upper(s: str) -> bool:
@@ -66,6 +68,31 @@ def _looks_like_list_start(s: str) -> bool:
     return bool(_list_start_rx.search(s))
 
 
+# ---- NEW: leader + page split support ---------------------------------------
+
+# Accept 3+ dots (with optional spaces), repeated ellipses, or middle-dots as a "leader" run.
+_LEADER_RUN = r"(?:(?:\.\s*){3,}|…+|(?:·\s*){3,})"
+
+# A leader run followed by spaces + a page number (optionally one trailing letter like 10A)
+_leader_page_break_rx = re.compile(rf"{_LEADER_RUN}\s*(\d+[A-Za-z]?)")
+
+def _first_leader_page_break_index(s: str):
+    """
+    If there's a leader run + page number and there's more non-space text after it,
+    return the index (in s) right AFTER the page number (i.e., where we should split).
+    Otherwise return None.
+    """
+    m = _leader_page_break_rx.search(s)
+    if not m:
+        return None
+    end_num = m.end(1)  # end of the page number group
+    # Only split if there's more text after the page number (same physical line/entity)
+    if s[end_num:].strip():
+        return end_num
+    return None
+
+# -----------------------------------------------------------------------------
+
 @Language.component("paragraph_entity")
 def paragraph_entity(doc):
     text = doc.text
@@ -80,7 +107,40 @@ def paragraph_entity(doc):
         if ent.label_ == TEXT_LABEL and _starts_with_upper(text[ent.start_char:ent.end_char]):
             start = ent.start_char
             end = ent.end_char
-            last_piece = text[ent.start_char:ent.end_char]
+            last_piece = text[start:end]
+
+            # --- NEW: handle TOC-style "leader + page" breaks inside this same TEXT entity ---
+            local_start = start
+            local_slice = text[local_start:end]
+
+            while True:
+                cut = _first_leader_page_break_index(local_slice)
+                if cut is None:
+                    break
+
+                # Emit a paragraph up to the end of the page number
+                cut_abs = local_start + cut
+                span = doc.char_span(local_start, cut_abs, label=PARAGRAPH_LABEL, alignment_mode="contract")
+                if span is not None:
+                    spans.append(span)
+
+                # Advance to the next non-space char after the cut (the next TOC item)
+                local_start = cut_abs
+                while local_start < end and text[local_start].isspace():
+                    local_start += 1
+                local_slice = text[local_start:end]
+
+            # If we produced at least one intra-entity paragraph and consumed the whole slice, skip normal merge.
+            if local_start > start:
+                if local_start < end:
+                    # There is remaining text in this entity; continue with normal merging from here
+                    start = local_start
+                    last_piece = text[start:end]
+                else:
+                    # Entire slice was consumed by intra-entity splits; move on to next entity
+                    i += 1
+                    continue
+            # --- END NEW ---
 
             j = i
             # Concatenate TEXT ents; allow continuation if next line starts lowercase.
@@ -93,13 +153,17 @@ def paragraph_entity(doc):
                     break
 
                 nxt_slice = text[nxt.start_char:nxt.end_char]
-                #if _looks_like_list_start(nxt_slice):
-                 #   break  # do not merge into lists/bullets
+
+                # Re-enable guard: do not merge into lists/bullets
+                if _looks_like_list_start(nxt_slice):
+                    break
 
                 ends_like_sentence = _ends_with_terminator(last_piece)
                 nxt_lead = _leading_alpha_case_or_none(nxt_slice)
 
-                # If current ends with . ! ? but next starts lowercase, treat as wrapped continuation.
+                # If current ends with . ! ? (or leader+page) but next starts lowercase, treat as wrapped continuation.
+                # NOTE: Leader+page considered a HARD stop at end-of-line by _ends_with_terminator;
+                # this lowercase exception should NOT override a forced split that already happened inside the same entity.
                 if ends_like_sentence and nxt_lead == 'lower':
                     ends_like_sentence = False
 
