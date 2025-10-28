@@ -19,11 +19,44 @@ OPTIONS = {"colors": {
 
 RULER_PATTERNS = [
 
-{"label": "Sumario", "pattern": "**Sumário**"},
-{"label": "Sumario", "pattern": "**Sumario**"},
+# {"label": "Sumario", "pattern": "**Sumário**"},
+# {"label": "Sumario", "pattern": "**Sumario**"},
+{"label": "Sumario",
+ "pattern": [
+   {"LOWER": {"IN": ["sumário", "sumario"]}},
+   {"ORTH": ":", "OP": "!"}
+ ]},
+ {"label": "Sumario",
+ "pattern": [
+   {"ORTH": "**"},
+   {"LOWER": {"IN": ["sumário", "sumario"]}},
+   {"ORTH": "**"},
+   {"ORTH": ":", "OP": "!"}
+ ]},
+
+
+
 {"label": "SERIE_III", "pattern": "Direção Regional do Trabalho"},
 {"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"},
-{"label": "JUNK_LABEL", "pattern": "SECRETARI"}
+{"label": "JUNK_LABEL", "pattern": "SECRETARI"},
+
+{"label": "DOC_NAME_LABEL", "pattern": "Convenções Coletivas de Trabalho:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Portarias de Extensão:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Despachos:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Portarias de Condições de Trabalho:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Eleição de Representantes:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Avisos de Cessação da Vigência de Convenções Colectivas de Trabalho:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Direção:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Convocatórias:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Eleições:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Estatutos:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Corpos Gerentes / Alterações:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Corpos Gerentes/Alterações:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Corpos Gerentes:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Alterações:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Associações Sindicais/Corpos Gerentes:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Associações de Empregadores/Direcção:"},
+{"label": "DOC_NAME_LABEL", "pattern": "Associações de Empregadores/Direção:"},
 
 ]
 

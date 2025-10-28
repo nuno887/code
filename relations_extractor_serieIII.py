@@ -175,34 +175,50 @@ class RelationExtractorSerieIII:
         return None
 
     def _extract_block(
-        self,
-        doc: Doc,
-        seq: List[EntitySpan],
-        paragraph_id: Optional[int],
-        sent_id: Optional[int],
-    ) -> List[Relation]:
+    self,
+    doc: Doc,
+    seq: List[EntitySpan],
+    paragraph_id: Optional[int],
+    sent_id: Optional[int],
+) -> List[Relation]:
+        """
+        Build relations for a single paragraph:
+
+        - If the paragraph has NO DOC_NAME:
+            pick ONLY the FIRST ORG in the paragraph and link it to each body
+            (DOC_TEXT / PARAGRAPH). This avoids multiplying children by the number
+            of ORGs and keeps org_ids to a single org.
+
+        - If the paragraph HAS DOC_NAME:
+            standard left-to-right scan:
+            * ORG(_WITH_STAR) → DOC_NAME for any org that precedes a doc name
+            * DOC_NAME → (DOC_TEXT | PARAGRAPH) for all subsequent bodies
+        """
         out: List[Relation] = []
 
-        # ---- Fallback: no DOC_NAME in this paragraph → link ORG(s) → each body
+        # ---- Fallback: no DOC_NAME in this paragraph → link a single ORG (the first) → each body
         has_docname = any(e.label == "DOC_NAME_LABEL" for e in seq)
         if not has_docname:
             orgs = [e for e in seq if e.label in ("ORG_LABEL", "ORG_WITH_STAR_LABEL")]
             bodies = [e for e in seq if e.label in ("DOC_TEXT", "PARAGRAPH")]
 
-            for org in orgs:
+            # Choose only the FIRST ORG (do nothing if none).
+            effective_org = orgs[0] if orgs else None
+
+            if effective_org is not None:
                 for b in bodies:
                     kind: RelKind = "ORG→DOC_TEXT" if b.label == "DOC_TEXT" else "ORG→PARAGRAPH"
                     out.append(Relation(
-                        head=org,
+                        head=effective_org,
                         tail=b,
                         kind=kind,
                         paragraph_id=paragraph_id,
                         sent_id=sent_id,
-                        evidence_text=doc.text[org.end:b.start].strip(),
+                        evidence_text=doc.text[effective_org.end:b.start].strip(),
                     ))
-            return out  # done for this paragraph
+            return out
 
-        # ---- Standard left-to-right scan (DOC_NAME links to ALL bodies)
+        # ---- Standard left-to-right scan (DOC_NAME links to ALL following bodies)
         n = len(seq)
         for i in range(n):
             head = seq[i]
@@ -215,8 +231,6 @@ class RelationExtractorSerieIII:
                 if kind is None:
                     continue
 
-                # For DOC_NAME → body, allow multiple (including same label)
-                # For ORG → DOC_NAME, link each occurrence encountered
                 out.append(Relation(
                     head=head,
                     tail=tail,
@@ -227,6 +241,7 @@ class RelationExtractorSerieIII:
                 ))
 
         return out
+
 
 
 

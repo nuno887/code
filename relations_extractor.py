@@ -1,13 +1,12 @@
-
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Literal, Iterable
+from typing import Dict, List, Optional, Tuple, Literal, Iterable, Union, Any
 from collections import defaultdict, OrderedDict
 import json
-import csv
+import re
+
 from spacy.tokens import Doc, Span
-from typing import Iterable, Optional, Union, List, Dict
 
 # ---- Labels we care about ----------------------------------------------------
 Label = Literal[
@@ -100,9 +99,7 @@ class RelationExtractor:
           ORG_WITH_STAR_LABEL → ORG_LABEL        (sub-org)
           ORG_WITH_STAR_LABEL → DOC_NAME_LABEL
           DOC_NAME_LABEL      → DOC_TEXT         (or PARAGRAPH)
-        The last one depends on 'serieIII':
-          - If serieIII=True: DOC_TEXT and PARAGRAPH are distinct kinds.
-          - If serieIII=False: both are treated as DOC_TEXT (collapsed).
+        The last one currently collapses PARAGRAPH into DOC_TEXT.
     """
 
     def __init__(
@@ -116,10 +113,11 @@ class RelationExtractor:
             "DOC_TEXT",
             "PARAGRAPH",
         ),
-        debug: bool = False,
+        debug: bool = False,  # kept but unused here
     ):
         self.valid_labels = valid_labels
         self.debug = debug
+        self.serieIII = serieIII
 
     # ----- public API ---------------------------------------------------------
     def extract(self, doc_sumario: Doc) -> List[Relation]:
@@ -132,7 +130,6 @@ class RelationExtractor:
 
         relations: List[Relation] = []
         for para_id, seq in by_para.items():
-            # seq is already in original order
             is_star_block = bool(seq and seq[0].label == "ORG_WITH_STAR_LABEL")
             rels_here = self._extract_in_sequence(
                 doc_sumario, seq, para_id, sent_id=None, is_star_block=is_star_block
@@ -142,10 +139,6 @@ class RelationExtractor:
         return relations
 
     # ----- internals ----------------------------------------------------------
-    def _dbg(self, *args):
-        if self.debug:
-            print("[relations]", *args)
-
     def _collect_entities(self, doc: Doc) -> List[EntitySpan]:
         """Collect EntitySpan in spaCy's native order.
         Paragraph boundaries:
@@ -162,16 +155,11 @@ class RelationExtractor:
                 continue
 
             if e.label_ == "ORG_WITH_STAR_LABEL":
-                # start a new paragraph and enter star block
                 current_pid += 1
                 in_star_block = True
-
             elif e.label_ == "ORG_LABEL":
-                # new paragraph only if NOT inside a starred block
                 if not in_star_block:
                     current_pid += 1
-
-            # We don't flip in_star_block off explicitly; a new starred org will start a new block.
 
             pid = current_pid if current_pid >= 0 else None
 
@@ -196,7 +184,7 @@ class RelationExtractor:
         if head_label == "ORG_WITH_STAR_LABEL" and tail_label == "DOC_NAME_LABEL":
             return "ORG*→DOC_NAME"
 
-        # DOC_NAME -> content: in I/II Série we treat DOC_TEXT and PARAGRAPH as equivalent
+        # DOC_NAME -> content: treat DOC_TEXT and PARAGRAPH as equivalent
         if head_label == "DOC_NAME_LABEL" and tail_label in ("DOC_TEXT", "PARAGRAPH"):
             return "DOC_NAME→DOC_TEXT"
 
@@ -211,20 +199,11 @@ class RelationExtractor:
         *,
         is_star_block: bool = False,
     ) -> List[Relation]:
-        """
-        Left→right scan within a paragraph.
-        If is_star_block: star header + multiple sub-orgs; we hard-scope each sub-org's block
-        so its DOC_NAMEs cannot bleed into the next org.
-        """
         out: List[Relation] = []
-
-        if self.debug:
-            self._dbg(f"_extract_in_sequence: {len(seq)} ents in paragraph {paragraph_id}, star={is_star_block}")
 
         # ---------- STAR BLOCK PATH ----------
         if is_star_block:
             if not seq or seq[0].label != "ORG_WITH_STAR_LABEL":
-                # safety: fall back to non-star path
                 is_star_block = False
             else:
                 star = seq[0]
@@ -292,12 +271,6 @@ class RelationExtractor:
         paragraph_id: Optional[int],
         sent_id: Optional[int],
     ) -> List[Relation]:
-        """
-        Standard left→right scan applied to a slice (block).
-        Allows:
-          • multiple *→DOC_NAME (heads can have many doc names)
-          • multiple ORG*→ORG (sub-orgs) if a star head is present (usually not in sub-blocks)
-        """
         out: List[Relation] = []
         linked_tail_labels_by_head: Dict[int, set[str]] = {}
 
@@ -339,12 +312,14 @@ class RelationExtractor:
         return out
 
 # ---- Export helpers ----------------------------------------------------------
+
 def export_relations_ndjson(relations: Iterable[Relation], path: str) -> None:
     """Write one JSON object per line (NDJSON)."""
     with open(path, "w", encoding="utf-8") as f:
         for r in relations:
             f.write(json.dumps(r.to_dict(), ensure_ascii=False))
             f.write("\n")
+
 
 def export_relations_grouped_json(relations: Iterable[Relation], path: str) -> None:
     """Group relations by paragraph_id into a single JSON file (full fields)."""
@@ -363,6 +338,7 @@ def export_relations_grouped_json(relations: Iterable[Relation], path: str) -> N
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
 
 def export_relations_grouped_json_compact(relations: Iterable[Relation], path: str) -> None:
     """Compact grouped JSON with only kind, head{text,label}, tail{text,label}."""
@@ -385,6 +361,7 @@ def export_relations_grouped_json_compact(relations: Iterable[Relation], path: s
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
 
 def export_relations_grouped_json_by_head(relations: Iterable[Relation], path: str) -> None:
     """
@@ -424,69 +401,40 @@ def export_relations_grouped_json_by_head(relations: Iterable[Relation], path: s
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-def export_relations_csv(relations: Iterable[Relation], path: str) -> None:
-    """
-    Compact CSV: only paragraph_id, kind, head(label,text), tail(label,text).
-    """
-    fields = [
-        "paragraph_id",
-        "kind",
-        "head_label", "head_text",
-        "tail_label", "tail_text",
-    ]
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
-        w.writeheader()
-        for r in relations:
-            w.writerow({
-                "paragraph_id": r.paragraph_id,
-                "kind": r.kind,
-                "head_label": r.head.label,
-                "head_text": r.head.text,
-                "tail_label": r.tail.label,
-                "tail_text": r.tail.text,
-            })
 
+# ---- Normalization helper for export-time de-duplication ---------------------
+
+def _norm_org(s: str) -> str:
+    """
+    Normalize organization strings for keying/dedup:
+      - Collapse whitespace
+      - Normalize hyphen/commas spacing
+      - Uppercase
+    Used for keys only; display uses original text.
+    """
+    s = re.sub(r"\s+", " ", s.strip())
+    s = re.sub(r"\s*-\s*", "-", s)
+    s = re.sub(r"\s*,\s*", ", ", s)  # <-- add the missing third arg: s
+    return s.upper()
+
+
+
+# ---- Minimal items exporter with per-paragraph de-dup ------------------------
 
 def export_relations_items_minimal_json(
     relations: Iterable[Relation],
-    path: Optional[str] = None
+    path: Optional[str] = None,
 ) -> Union[Dict[str, Any], str]:
     """
-    Export as minimal hierarchical 'items' (Option D):
+    Export as minimal hierarchical 'items':
       - Non-star paragraph -> { paragraph_id, org, docs[] }
       - Star paragraph     -> { paragraph_id, top_org, sub_orgs[ {org, docs[]} ] }
     Fields keep only {text, label} to stay compact.
 
-    If `path` is None:
-      - Returns the JSON payload as a Python dict (and does NOT write to disk).
-    If `path` is a string:
-      - Writes the JSON to the given path and returns that path.
-
-    Example payload:
-    {
-      "items": [
-        {
-          "paragraph_id": 0,
-          "org":  {"text": "...", "label": "ORG_LABEL"},
-          "docs": [{"text":"...","label":"DOC_NAME_LABEL"}, ...]
-        },
-        {
-          "paragraph_id": 5,
-          "top_org": {"text":"...","label":"ORG_WITH_STAR_LABEL"},
-          "sub_orgs": [
-            {
-              "org":  {"text":"...","label":"ORG_LABEL"},
-              "docs": [{"text":"...","label":"DOC_NAME_LABEL"}, ...]
-            }
-          ]
-        }
-      ]
-    }
+    De-duplication:
+      - Within each paragraph (PID), organizations are de-duplicated by a normalized key.
+      - Display text preserves the first encountered original text for that key.
     """
-    from collections import OrderedDict
-    import json
-
     # Group relations by paragraph_id preserving insertion order
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
     for r in relations:
@@ -504,24 +452,27 @@ def export_relations_items_minimal_json(
             top_org_head = star_links[0].head
             top_org = {"text": top_org_head.text, "label": top_org_head.label}
 
-            # Ordered list of sub-org names (preserve text order as they appear)
-            sub_org_order: "OrderedDict[str, None]" = OrderedDict(
-                (r.tail.text, None) for r in star_links
-            )
+            # Sub-org order by normalized key, preserving first appearance
+            sub_org_order: "OrderedDict[str, str]" = OrderedDict()
+            for r in star_links:
+                norm_key = _norm_org(r.tail.text)
+                if norm_key not in sub_org_order:
+                    sub_org_order[norm_key] = r.tail.text  # keep original text first seen
 
-            # Collect docs per sub-org (ORG→DOC_NAME)
-            docs_by_org: Dict[str, List[dict]] = {}
+            # Collect docs per sub-org using normalized key
+            docs_by_norm_org: Dict[str, List[dict]] = {}
             for r in rels:
                 if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL":
-                    docs_by_org.setdefault(r.head.text, []).append(
+                    k = _norm_org(r.head.text)
+                    docs_by_norm_org.setdefault(k, []).append(
                         {"text": r.tail.text, "label": r.tail.label}
                     )
 
             sub_orgs: List[dict] = []
-            for org_text in sub_org_order.keys():
+            for norm_key, original_text in sub_org_order.items():
                 sub_orgs.append({
-                    "org": {"text": org_text, "label": "ORG_LABEL"},
-                    "docs": docs_by_org.get(org_text, [])
+                    "org": {"text": original_text, "label": "ORG_LABEL"},
+                    "docs": docs_by_norm_org.get(norm_key, [])
                 })
 
             items.append({
@@ -531,15 +482,18 @@ def export_relations_items_minimal_json(
             })
             continue  # next paragraph
 
-        # Non-star paragraph: pick the first ORG→DOC_NAME head as the org
+        # Non-star paragraph: emit a single item per paragraph for the first org (by normalized key)
         org_doc_rels = [r for r in rels if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL"]
         if org_doc_rels:
             primary_head = org_doc_rels[0].head
-            docs = [
-                {"text": r.tail.text, "label": r.tail.label}
-                for r in org_doc_rels
-                if r.head.text == primary_head.text
-            ]
+            primary_key = _norm_org(primary_head.text)
+
+            # Gather docs for all relations with the same normalized org key
+            docs: List[dict] = []
+            for r in org_doc_rels:
+                if _norm_org(r.head.text) == primary_key:
+                    docs.append({"text": r.tail.text, "label": r.tail.label})
+
             items.append({
                 "paragraph_id": pid,
                 "org": {"text": primary_head.text, "label": primary_head.label},
