@@ -249,18 +249,17 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
 
     # Accept things like: "n.º 6/2025", "N.º12", "No. 3/2024", "nº 12"
     _N_DOT_NUM_RE = re.compile(
-        r"""(?ix)
-        \b
-        n
-        \s*
-        (?:[\.\u00BA\u00B0o])?   # ., º (U+00BA), ° (U+00B0), or 'o'
-        \.?
-        \s*
-        \d+
-        (?:\s*/\s*\d+)?          # optional /year
-        \b
-        """
-    )
+    r"""(?ix)
+    \b
+    n
+    \s*
+    (?:[.\u00BA\u00B0o]\s*){0,2}   # allow ".", "º", "°", "o" in any order, up to two (covers "n.º")
+    \d+
+    (?:\s*/\s*\d+)?                # optional /year
+    \b
+    """
+)
+
     # Sequences of ≥3 dots/ellipsis → single period
     _DOT_LEADER_RE = re.compile(r"[.\u2026·]{3,}")
     # Sequences of dashes/long dashes
