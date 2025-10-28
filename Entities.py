@@ -19,18 +19,11 @@ OPTIONS = {"colors": {
 
 RULER_PATTERNS = [
 
-# {"label": "Sumario", "pattern": "**Sumário**"},
-# {"label": "Sumario", "pattern": "**Sumario**"},
+{"label": "Sumario", "pattern": "**Sumário**"},
+{"label": "Sumario", "pattern": "**Sumario**"},
 {"label": "Sumario",
  "pattern": [
    {"LOWER": {"IN": ["sumário", "sumario"]}},
-   {"ORTH": ":", "OP": "!"}
- ]},
- {"label": "Sumario",
- "pattern": [
-   {"ORTH": "**"},
-   {"LOWER": {"IN": ["sumário", "sumario"]}},
-   {"ORTH": "**"},
    {"ORTH": ":", "OP": "!"}
  ]},
 
