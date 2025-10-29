@@ -213,6 +213,15 @@ def _iter_bold_pairs_no_merge_III(text: str):
         yield open_idx, inner_start, close_idx, close_idx + 2
         i = close_idx + 2
 
+STOP_PUNCT = set(".:;?!…")  # add more here later
+
+def _ends_with_stop(inner: str, stops: set[str] = STOP_PUNCT) -> bool:
+    i = len(inner) - 1
+    while i >= 0 and inner[i].isspace():
+        i -= 1
+    return i >= 0 and inner[i] in stops
+
+
 @Language.component("docname_entity_III")
 def docname_entity(doc):
     text = doc.text
@@ -266,13 +275,14 @@ def docname_entity(doc):
     prim.sort(key=lambda t: t[0])  # by outer_start
 
     # 2) Merge adjacent primitives when only whitespace is between,
-    #    but stop on colon hard-stop and never cross SERIE_III.
+    #    but stop on colon or trailing dot, and never cross SERIE_III.
     merged = []
     cur_os, cur_is, cur_ie, cur_oe = prim[0]
     for os, is_, ie, oe in prim[1:]:
         between = text[cur_oe:os]
         left_inner = text[cur_is:cur_ie]
-        hard_stop = left_inner.rstrip().endswith(":")
+
+        hard_stop = left_inner.rstrip().endswith(":") or _ends_with_stop(left_inner)
 
         if (between.strip() == "") and (not hard_stop) and (not serie3_in_gap(cur_oe, os)):
             # extend current group to include the next segment
@@ -295,6 +305,7 @@ def docname_entity(doc):
     if spans:
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
+
 
 # NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
 # and handling lines that are just "**" as open/close markers across lines.
