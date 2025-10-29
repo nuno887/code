@@ -311,97 +311,6 @@ class RelationExtractor:
 
         return out
 
-# ---- Export helpers ----------------------------------------------------------
-
-def export_relations_ndjson(relations: Iterable[Relation], path: str) -> None:
-    """Write one JSON object per line (NDJSON)."""
-    with open(path, "w", encoding="utf-8") as f:
-        for r in relations:
-            f.write(json.dumps(r.to_dict(), ensure_ascii=False))
-            f.write("\n")
-
-
-def export_relations_grouped_json(relations: Iterable[Relation], path: str) -> None:
-    """Group relations by paragraph_id into a single JSON file (full fields)."""
-    buckets: Dict[Optional[int], List[dict]] = defaultdict(list)
-    order: List[Optional[int]] = []
-    for r in relations:
-        pid = r.paragraph_id
-        if pid not in buckets:
-            order.append(pid)
-        buckets[pid].append(r.to_dict())
-    payload = {
-        "paragraphs": [
-            {"paragraph_id": pid, "relations": buckets[pid]}
-            for pid in order
-        ]
-    }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
-def export_relations_grouped_json_compact(relations: Iterable[Relation], path: str) -> None:
-    """Compact grouped JSON with only kind, head{text,label}, tail{text,label}."""
-    buckets: Dict[Optional[int], List[dict]] = defaultdict(list)
-    order: List[Optional[int]] = []
-    for r in relations:
-        pid = r.paragraph_id
-        if pid not in buckets:
-            order.append(pid)
-        buckets[pid].append({
-            "kind": r.kind,
-            "head": {"text": r.head.text, "label": r.head.label},
-            "tail": {"text": r.tail.text, "label": r.tail.label},
-        })
-    payload = {
-        "paragraphs": [
-            {"paragraph_id": pid, "relations": buckets[pid]}
-            for pid in order
-        ]
-    }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
-def export_relations_grouped_json_by_head(relations: Iterable[Relation], path: str) -> None:
-    """
-    Group by paragraph -> head (text,label) -> kind -> [tails...]
-    to avoid repeating the same head for multiple tails.
-    """
-    paragraphs = OrderedDict()  # pid -> list[Relation]
-    for r in relations:
-        pid = r.paragraph_id
-        paragraphs.setdefault(pid, []).append(r)
-
-    payload = {"paragraphs": []}
-    kind_order = ["ORG→DOC_NAME", "ORG→ORG*", "ORG*→ORG", "ORG*→DOC_NAME", "DOC_NAME→DOC_TEXT", "DOC_NAME→PARAGRAPH"]
-
-    for pid, rels in paragraphs.items():
-        # group by head (text+label) preserving insertion order
-        heads = OrderedDict()  # (head_text, head_label) -> dict(kind -> [tails])
-        for r in rels:
-            key = (r.head.text, r.head.label)
-            if key not in heads:
-                heads[key] = defaultdict(list)
-            heads[key][r.kind].append({"text": r.tail.text, "label": r.tail.label})
-
-        heads_list = []
-        for (h_text, h_label), relmap in heads.items():
-            relations_obj = {k: relmap[k] for k in kind_order if k in relmap}
-            heads_list.append({
-                "head": {"text": h_text, "label": h_label},
-                "relations": relations_obj
-            })
-
-        payload["paragraphs"].append({
-            "paragraph_id": pid,
-            "heads": heads_list
-        })
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-
-
 # ---- Normalization helper for export-time de-duplication ---------------------
 
 def _norm_org(s: str) -> str:
@@ -418,6 +327,19 @@ def _norm_org(s: str) -> str:
     return s.upper()
 
 
+def _norm_doc(s: str) -> str:
+    """
+    Normalize document name strings for keying/dedup:
+      - Collapse whitespace
+      - Normalize hyphen/commas spacing
+      - Uppercase
+    """
+    s = re.sub(r"\s+", " ", s.strip())
+    s = re.sub(r"\s*-\s*", "-", s)
+    s = re.sub(r"\s*,\s*", ", ", s)
+    return s.upper()
+
+
 
 # ---- Minimal items exporter with per-paragraph de-dup ------------------------
 
@@ -425,16 +347,6 @@ def export_relations_items_minimal_json(
     relations: Iterable[Relation],
     path: Optional[str] = None,
 ) -> Union[Dict[str, Any], str]:
-    """
-    Export as minimal hierarchical 'items':
-      - Non-star paragraph -> { paragraph_id, org, docs[] }
-      - Star paragraph     -> { paragraph_id, top_org, sub_orgs[ {org, docs[]} ] }
-    Fields keep only {text, label} to stay compact.
-
-    De-duplication:
-      - Within each paragraph (PID), organizations are de-duplicated by a normalized key.
-      - Display text preserves the first encountered original text for that key.
-    """
     # Group relations by paragraph_id preserving insertion order
     by_pid: "OrderedDict[Optional[int], List[Relation]]" = OrderedDict()
     for r in relations:
@@ -445,28 +357,37 @@ def export_relations_items_minimal_json(
     items: List[dict] = []
 
     for pid, rels in by_pid.items():
-        # Is this a star block? (top org with sub-orgs)
+        # -------- STAR PARAGRAPH --------
         star_links = [r for r in rels if r.kind == "ORG*→ORG"]
         if star_links:
-            # pick the first starred head as the top_org (they should all share the same head)
             top_org_head = star_links[0].head
             top_org = {"text": top_org_head.text, "label": top_org_head.label}
 
-            # Sub-org order by normalized key, preserving first appearance
+            # sub-org order by normalized key
             sub_org_order: "OrderedDict[str, str]" = OrderedDict()
             for r in star_links:
                 norm_key = _norm_org(r.tail.text)
                 if norm_key not in sub_org_order:
-                    sub_org_order[norm_key] = r.tail.text  # keep original text first seen
+                    sub_org_order[norm_key] = r.tail.text
 
-            # Collect docs per sub-org using normalized key
+            # Collect DOC_NAMEs per sub-org, with de-dup (DEDUP)
             docs_by_norm_org: Dict[str, List[dict]] = {}
+            seen_docs_by_norm_org: Dict[str, set[str]] = {}
+
             for r in rels:
                 if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL":
-                    k = _norm_org(r.head.text)
-                    docs_by_norm_org.setdefault(k, []).append(
-                        {"text": r.tail.text, "label": r.tail.label}
-                    )
+                    org_key = _norm_org(r.head.text)
+                    doc_key = _norm_doc(r.tail.text)
+
+                    if org_key not in seen_docs_by_norm_org:
+                        seen_docs_by_norm_org[org_key] = set()
+                        docs_by_norm_org[org_key] = []
+
+                    if doc_key not in seen_docs_by_norm_org[org_key]:
+                        docs_by_norm_org[org_key].append(
+                            {"text": r.tail.text, "label": r.tail.label}
+                        )
+                        seen_docs_by_norm_org[org_key].add(doc_key)
 
             sub_orgs: List[dict] = []
             for norm_key, original_text in sub_org_order.items():
@@ -480,19 +401,27 @@ def export_relations_items_minimal_json(
                 "top_org": top_org,
                 "sub_orgs": sub_orgs
             })
-            continue  # next paragraph
+            continue
 
-        # Non-star paragraph: emit a single item per paragraph for the first org (by normalized key)
-        org_doc_rels = [r for r in rels if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL"]
+        # -------- NON-STAR PARAGRAPH --------
+        org_doc_rels = [
+            r for r in rels
+            if r.kind == "ORG→DOC_NAME" and r.head.label == "ORG_LABEL"
+        ]
         if org_doc_rels:
             primary_head = org_doc_rels[0].head
             primary_key = _norm_org(primary_head.text)
 
-            # Gather docs for all relations with the same normalized org key
+            # Gather docs for all relations with same normalized org key, with de-dup (DEDUP)
             docs: List[dict] = []
+            seen_doc_keys: set[str] = set()
+
             for r in org_doc_rels:
                 if _norm_org(r.head.text) == primary_key:
-                    docs.append({"text": r.tail.text, "label": r.tail.label})
+                    doc_key = _norm_doc(r.tail.text)
+                    if doc_key not in seen_doc_keys:
+                        docs.append({"text": r.tail.text, "label": r.tail.label})
+                        seen_doc_keys.add(doc_key)
 
             items.append({
                 "paragraph_id": pid,
@@ -501,7 +430,7 @@ def export_relations_items_minimal_json(
             })
             continue
 
-        # Fallback: no ORG→DOC_NAME found (rare). Skip to keep the output clean.
+        # Fallback: no ORG→DOC_NAME found; skip
 
     payload = {"items": items}
 

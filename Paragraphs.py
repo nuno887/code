@@ -197,12 +197,27 @@ def paragraph_entity(doc):
                 if _looks_like_list_start(nxt_slice):
                     break
 
+                # --- NEW heuristics -------------------------------------------
+                nxt_ends_with_leader = _ends_with_ellipsis(nxt_slice)
                 ends_like_sentence = _ends_with_terminator(last_piece)
                 nxt_lead = _leading_alpha_case_or_none(nxt_slice)
 
-                # If current ends with . ! ? (or leader+page) but next starts lowercase, treat as wrapped continuation.
+                # If current ends like a sentence but next starts lowercase, it's a wrapped continuation (unless last_piece ends with ellipsis).
                 if ends_like_sentence and nxt_lead == 'lower' and not _ends_with_ellipsis(last_piece):
                     ends_like_sentence = False
+
+                # NEW RULE 1: If the next line ends with leader dots, allow merge even if next starts Uppercase.
+                if ends_like_sentence and nxt_ends_with_leader:
+                    ends_like_sentence = False
+
+                # NEW RULE 2 (optional): If last piece ends with a short abbreviation like "Assoc."/"Sind.", allow continuation.
+                try:
+                    if ends_like_sentence and _ends_with_abbrev(last_piece):
+                        ends_like_sentence = False
+                except NameError:
+                    # _ends_with_abbrev not defined; ignore this heuristic.
+                    pass
+                # ---------------------------------------------------------------
 
                 if ends_like_sentence:
                     break
