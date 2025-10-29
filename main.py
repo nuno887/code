@@ -182,7 +182,7 @@ def main():
     serie_iii = is_serie_iii(pdf_path.name)
 
     # 1) Load model (single factory) + custom entities
-    nlp = get_nlp(disable_ner=True)
+    nlp = get_nlp(disable_ner=True, SerieIII= serie_iii)
     # setup_entities(nlp)  # already called by get_nlp()
 
     # 2) Extract text and build docs
@@ -209,7 +209,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc, Path("ents.html"))
+    render_entities_html(doc_body, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")

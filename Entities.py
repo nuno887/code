@@ -192,7 +192,10 @@ def allcaps_entity(doc):
 
 
 
-def _iter_bold_pairs_no_merge(text: str):
+from spacy.language import Language
+from spacy.util import filter_spans
+
+def _iter_bold_pairs_no_merge_III(text: str):
     """
     Yield primitive bold pairs without merging across whitespace.
     Returns (outer_start, inner_start, inner_end, outer_end) for each **...**.
@@ -210,7 +213,7 @@ def _iter_bold_pairs_no_merge(text: str):
         yield open_idx, inner_start, close_idx, close_idx + 2
         i = close_idx + 2
 
-@Language.component("docname_entity")
+@Language.component("docname_entity_III")
 def docname_entity(doc):
     text = doc.text
 
@@ -235,11 +238,11 @@ def docname_entity(doc):
         "Direcção Regional do Trabalho",
         "Regulamentação do Trabalho",
     ]
-    KNOWN_SERIE3_TITLES_NORM = { _normalize_for_match(x) for x in KNOWN_SERIE3_TITLES }
+    KNOWN_SERIE3_TITLES_NORM = {_normalize_for_match(x) for x in KNOWN_SERIE3_TITLES}
 
     # 1) Collect primitive bold pairs that look like doc names
     prim = []
-    for os, is_, ie, oe in _iter_bold_pairs_no_merge(text):
+    for os, is_, ie, oe in _iter_bold_pairs_no_merge_III(text):
         inner = text[is_:ie]
         inner_norm = _normalize_for_match(inner)
 
@@ -254,6 +257,7 @@ def docname_entity(doc):
             or any(ch.isalpha() and ch.islower() for ch in inner)
         )
         if looks_like_docname:
+            # keep full (OUTER) bounds so ** are included
             prim.append((os, is_, ie, oe))
 
     if not prim:
@@ -271,19 +275,20 @@ def docname_entity(doc):
         hard_stop = left_inner.rstrip().endswith(":")
 
         if (between.strip() == "") and (not hard_stop) and (not serie3_in_gap(cur_oe, os)):
-            # extend current group to include the next inner segment
+            # extend current group to include the next segment
             cur_oe = oe
             cur_ie = ie
         else:
-            merged.append((cur_is, cur_ie))  # store INNER bounds only
+            # store OUTER bounds so ** markers are part of the entity
+            merged.append((cur_os, cur_oe))
             cur_os, cur_is, cur_ie, cur_oe = os, is_, ie, oe
-    merged.append((cur_is, cur_ie))
+    merged.append((cur_os, cur_oe))
 
-    # 3) Create spans using INNER bounds so we don’t include ** markers
+    # 3) Create spans using OUTER bounds to include the ** markers
     spans = []
     for s, e in merged:
         if s < e:
-            span = doc.char_span(s, e, label="DOC_NAME_LABEL", alignment_mode="contract")
+            span = doc.char_span(s, e, label="DOC_NAME_LABEL", alignment_mode="expand")
             if span is not None:
                 spans.append(span)
 
@@ -291,8 +296,73 @@ def docname_entity(doc):
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
 
+# NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
+# and handling lines that are just "**" as open/close markers across lines.
+def _iter_bold_blocks(text: str):
+    """
+    Yield Markdown bold blocks **...**; merge adjacent pairs on the SAME line.
+    Returns (outer_start, inner_start, inner_end, outer_end).
+    """
+    n = len(text)
+    i = 0
+    while i < n:
+        open_idx = text.find("**", i)
+        if open_idx == -1:
+            break
+        inner_start = open_idx + 2
+        close_idx = text.find("**", inner_start)
+        if close_idx == -1:
+            break
+
+        # initial block bounds (including **)
+        block_start = open_idx
+        block_end = close_idx + 2
+
+        # try to merge following **...** pairs if only spaces (no newline) lie between
+        j = block_end
+        while j < n:
+            # stop merging if we see a newline between pairs
+            k = j
+            saw_newline = False
+            while k < n and text[k].isspace():
+                if text[k] == "\n":
+                    saw_newline = True
+                    break
+                k += 1
+            if saw_newline:
+                break
+            # next pair must start immediately after spaces
+            if k + 1 < n and text[k] == "*" and text[k + 1] == "*":
+                next_open = k
+                next_inner_start = next_open + 2
+                next_close = text.find("**", next_inner_start)
+                if next_close == -1:
+                    break
+                # extend current block to include this adjacent pair
+                block_end = next_close + 2
+                j = block_end
+            else:
+                break
+
+        yield block_start, inner_start, block_end - 2, block_end
+        i = block_end
 
 
+
+@Language.component("docname_entity")
+def docname_entity(doc):
+    text = doc.text
+    spans = []
+    for outer_start, inner_start, inner_end, outer_end in _iter_bold_blocks(text):
+        inner = text[inner_start:inner_end]
+        # Match if (1) normalized text is in your known list OR (2) it contains lowercase letters
+        if (_normalize_for_match(inner) in KNOWN_DOC_NAMES_NORM) or any(ch.isalpha() and ch.islower() for ch in inner):
+            span = doc.char_span(outer_start, outer_end, label="DOC_NAME_LABEL", alignment_mode="contract")
+            if span is not None:
+                spans.append(span)
+    if spans:
+        doc.ents = filter_spans(list(doc.ents) + spans)
+    return doc
 
 @Language.component("junk_entity")  # NEW
 def junk_entity(doc):
@@ -325,12 +395,15 @@ def junk_entity(doc):
 
 
 
-def setup_entities(nlp):
+def setup_entities(nlp, SerieIII: bool):
 
     ruler = nlp.add_pipe("entity_ruler", first = True)
     ruler.add_patterns(RULER_PATTERNS)
     nlp.add_pipe("allcaps_entity")
-    nlp.add_pipe("docname_entity")
+    if SerieIII:
+        nlp.add_pipe("docname_entity_III")
+    else:
+        nlp.add_pipe("docname_entity")
     # nlp.add_pipe("junk_entity")
     nlp.add_pipe("doc_text_entity")
     # nlp.add_pipe("strip_junk_ents")
