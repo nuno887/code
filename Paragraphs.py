@@ -76,6 +76,13 @@ _LEADER_RUN = r"(?:(?:\.\s*){3,}|…+|(?:·\s*){3,})"
 # A leader run followed by spaces + a page number (optionally one trailing letter like 10A)
 _leader_page_break_rx = re.compile(rf"{_LEADER_RUN}\s*(\d+[A-Za-z]?)")
 
+# Short-word abbreviation at EOL (e.g., "Assoc.", "Sind.", "Prof.")
+_abbrev_eol_rx = re.compile(r"(?:\b[A-Za-zÀ-ÖØ-öø-ÿ]{1,6}\.)\s*$")
+
+def _ends_with_abbrev(s: str) -> bool:
+    return bool(_abbrev_eol_rx.search(s.strip()))
+
+
 def _first_leader_page_break_index(s: str):
     """
     If there's a leader run + page number and there's more non-space text after it,
