@@ -27,7 +27,7 @@ RULER_PATTERNS = [
    {"ORTH": ":", "OP": "!"}
  ]},
 
-
+{"label": "SERIE_III", "pattern": "**Regulamentação do Trabalho**"},
 
 {"label": "SERIE_III", "pattern": "Direção Regional do Trabalho"},
 {"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"},
@@ -82,6 +82,7 @@ def _is_junk_line(s: str) -> bool:
     if any(ch.isalpha() for ch in s):
         return False
     return bool(_junk_rx.match(s))
+
 
 
 def _docname_line_is_eligible(line: str) -> bool:
@@ -190,12 +191,11 @@ def allcaps_entity(doc):
 
 
 
-# NEW: iterate bold blocks, merging adjacent **...** chunks separated only by whitespace,
-# and handling lines that are just "**" as open/close markers across lines.
-def _iter_bold_blocks(text: str):
+
+def _iter_bold_pairs_no_merge(text: str):
     """
-    Yield Markdown bold blocks **...**; merge adjacent pairs on the SAME line.
-    Returns (outer_start, inner_start, inner_end, outer_end).
+    Yield primitive bold pairs without merging across whitespace.
+    Returns (outer_start, inner_start, inner_end, outer_end) for each **...**.
     """
     n = len(text)
     i = 0
@@ -207,60 +207,92 @@ def _iter_bold_blocks(text: str):
         close_idx = text.find("**", inner_start)
         if close_idx == -1:
             break
-
-        # initial block bounds (including **)
-        block_start = open_idx
-        block_end = close_idx + 2
-
-        # try to merge following **...** pairs if only spaces (no newline) lie between
-        j = block_end
-        while j < n:
-            # stop merging if we see a newline between pairs
-            k = j
-            saw_newline = False
-            while k < n and text[k].isspace():
-                if text[k] == "\n":
-                    saw_newline = True
-                    break
-                k += 1
-            if saw_newline:
-                break
-            # next pair must start immediately after spaces
-            if k + 1 < n and text[k] == "*" and text[k + 1] == "*":
-                next_open = k
-                next_inner_start = next_open + 2
-                next_close = text.find("**", next_inner_start)
-                if next_close == -1:
-                    break
-                # extend current block to include this adjacent pair
-                block_end = next_close + 2
-                j = block_end
-            else:
-                break
-
-        yield block_start, inner_start, block_end - 2, block_end
-        i = block_end
-
-
-
-
-
-
+        yield open_idx, inner_start, close_idx, close_idx + 2
+        i = close_idx + 2
 
 @Language.component("docname_entity")
 def docname_entity(doc):
     text = doc.text
+
+    # Collect SERIE_III spans from existing ents (EntityRuler ran first)
+    serie3_spans = [(e.start_char, e.end_char) for e in doc.ents if e.label_ == "SERIE_III"]
+
+    def overlaps_serie3(s, e):
+        for a, b in serie3_spans:
+            if not (e <= a or s >= b):
+                return True
+        return False
+
+    def serie3_in_gap(left_e, right_s):
+        for a, b in serie3_spans:
+            if a < right_s and b > left_e:
+                return True
+        return False
+
+    # Known SERIE_III titles (normalized)
+    KNOWN_SERIE3_TITLES = [
+        "Direção Regional do Trabalho",
+        "Direcção Regional do Trabalho",
+        "Regulamentação do Trabalho",
+    ]
+    KNOWN_SERIE3_TITLES_NORM = { _normalize_for_match(x) for x in KNOWN_SERIE3_TITLES }
+
+    # 1) Collect primitive bold pairs that look like doc names
+    prim = []
+    for os, is_, ie, oe in _iter_bold_pairs_no_merge(text):
+        inner = text[is_:ie]
+        inner_norm = _normalize_for_match(inner)
+
+        # skip if overlaps SERIE_III or is a known SERIE_III heading
+        if overlaps_serie3(os, oe):
+            continue
+        if inner_norm in KNOWN_SERIE3_TITLES_NORM:
+            continue
+
+        looks_like_docname = (
+            inner_norm in KNOWN_DOC_NAMES_NORM
+            or any(ch.isalpha() and ch.islower() for ch in inner)
+        )
+        if looks_like_docname:
+            prim.append((os, is_, ie, oe))
+
+    if not prim:
+        return doc
+
+    prim.sort(key=lambda t: t[0])  # by outer_start
+
+    # 2) Merge adjacent primitives when only whitespace is between,
+    #    but stop on colon hard-stop and never cross SERIE_III.
+    merged = []
+    cur_os, cur_is, cur_ie, cur_oe = prim[0]
+    for os, is_, ie, oe in prim[1:]:
+        between = text[cur_oe:os]
+        left_inner = text[cur_is:cur_ie]
+        hard_stop = left_inner.rstrip().endswith(":")
+
+        if (between.strip() == "") and (not hard_stop) and (not serie3_in_gap(cur_oe, os)):
+            # extend current group to include the next inner segment
+            cur_oe = oe
+            cur_ie = ie
+        else:
+            merged.append((cur_is, cur_ie))  # store INNER bounds only
+            cur_os, cur_is, cur_ie, cur_oe = os, is_, ie, oe
+    merged.append((cur_is, cur_ie))
+
+    # 3) Create spans using INNER bounds so we don’t include ** markers
     spans = []
-    for outer_start, inner_start, inner_end, outer_end in _iter_bold_blocks(text):
-        inner = text[inner_start:inner_end]
-        # Match if (1) normalized text is in your known list OR (2) it contains lowercase letters
-        if (_normalize_for_match(inner) in KNOWN_DOC_NAMES_NORM) or any(ch.isalpha() and ch.islower() for ch in inner):
-            span = doc.char_span(outer_start, outer_end, label="DOC_NAME_LABEL", alignment_mode="contract")
+    for s, e in merged:
+        if s < e:
+            span = doc.char_span(s, e, label="DOC_NAME_LABEL", alignment_mode="contract")
             if span is not None:
                 spans.append(span)
+
     if spans:
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
+
+
+
 
 @Language.component("junk_entity")  # NEW
 def junk_entity(doc):
@@ -303,6 +335,6 @@ def setup_entities(nlp):
     nlp.add_pipe("doc_text_entity")
     # nlp.add_pipe("strip_junk_ents")
     nlp.add_pipe("paragraph_entity")
-    
+        
 
 

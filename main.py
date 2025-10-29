@@ -170,7 +170,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IIISerie-05 2007-03-02.pdf",
+        default="IIISerie-011-2024-05-10.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -196,8 +196,12 @@ def main():
     # 3) Extract relations + payload
     rels, payload = extract_relations_and_payload(doc_sumario, serie_iii)
 
+   
+    payload = export_serieIII_items_minimal_json(rels)
+
+
     # 4) Split body (Serie III uses our new splitter)
-    results, summary = split_body(doc_body, payload, serie_iii, nlp)
+    results, summary = split_body(doc, payload, serie_iii, nlp)
 
     print("============== MAIN =====================")
 
@@ -205,7 +209,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc_sumario, Path("ents.html"))
+    render_entities_html(doc, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")

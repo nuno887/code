@@ -10,7 +10,6 @@ PARAGRAPH_LABEL = "PARAGRAPH"
 # AND allow optional spaces + page number (e.g., "................ 10") before end-of-line.
 _term_rx = re.compile(r"(?:[.!?]|…+|\.{3,})(?:\s*\d+[A-Za-z]?)?\s*$")  # strong terminators incl. leaders+page at end
 
-
 def _starts_with_upper(s: str) -> bool:
     # Skip leading spaces and opening punctuation/symbols (quotes, dashes, brackets…)
     for ch in s.lstrip():
@@ -29,10 +28,8 @@ def _starts_with_upper(s: str) -> bool:
         return False
     return False
 
-
 def _ends_with_terminator(s: str) -> bool:
     return bool(_term_rx.search(s.strip()))
-
 
 def _leading_alpha_case_or_none(s: str):
     """
@@ -52,12 +49,11 @@ def _leading_alpha_case_or_none(s: str):
         return None
     return None
 
-
 _list_start_rx = re.compile(
     r"""
     ^\s*
     (?:[•—–]            # dash/bullet
-     |\d+\s*[\)\.]       # 1) or 1.
+     |\d+\s*[\)\.]      # 1) or 1.
     )
     """,
     re.VERBOSE,
@@ -68,13 +64,11 @@ _ellipsis_eol_rx = re.compile(r"(?:…+|\.{3,})\s*$")
 def _ends_with_ellipsis(s: str) -> bool:
     return bool(_ellipsis_eol_rx.search(s.strip()))
 
-
 def _looks_like_list_start(s: str) -> bool:
     """Detect simple list/bullet starts to avoid false merges."""
     return bool(_list_start_rx.search(s))
 
-
-# ---- NEW: leader + page split support ---------------------------------------
+# ---- leader + page split support --------------------------------------------
 
 # Accept 3+ dots (with optional spaces), repeated ellipses, or middle-dots as a "leader" run.
 _LEADER_RUN = r"(?:(?:\.\s*){3,}|…+|(?:·\s*){3,})"
@@ -104,6 +98,41 @@ def paragraph_entity(doc):
     text = doc.text
     ents = sorted(doc.ents, key=lambda e: e.start_char)
 
+    # --- PROTECTION: never overlap DOC_NAME_LABEL or SERIE_III ----------------
+    PROTECTED_LABELS = {"DOC_NAME_LABEL", "SERIE_III"}
+    protected_spans = sorted(
+        [(e.start_char, e.end_char) for e in doc.ents if e.label_ in PROTECTED_LABELS]
+    )
+
+    def first_overlap(s: int, e: int):
+        """Return (a,b) of the first protected span that overlaps [s,e), else None."""
+        for a, b in protected_spans:
+            if not (e <= a or s >= b):
+                return (a, b)
+        return None
+
+    def gap_has_protected(left_e: int, right_s: int) -> bool:
+        """Any protected span touching the gap [left_e, right_s]?"""
+        for a, b in protected_spans:
+            if a < right_s and b > left_e:
+                return True
+        return False
+
+    def clip_to_before_protected(s: int, e: int):
+        """
+        If [s,e) overlaps a protected span (a,b), return (s, min(e,a), True).
+        Else, return (s, e, False).
+        """
+        ov = first_overlap(s, e)
+        if ov is None:
+            return s, e, False
+        a, _b = ov
+        if s < a:
+            return s, min(e, a), True
+        # protected starts at or before s -> do not emit anything
+        return s, s, True
+    # --------------------------------------------------------------------------
+
     spans = []
     i = 0
     n = len(ents)
@@ -115,7 +144,7 @@ def paragraph_entity(doc):
             end = ent.end_char
             last_piece = text[start:end]
 
-            # --- NEW: handle TOC-style "leader + page" breaks inside this same TEXT entity ---
+            # --- Intra-entity TOC "leader + page" splits ----------------------
             local_start = start
             local_slice = text[local_start:end]
 
@@ -124,29 +153,33 @@ def paragraph_entity(doc):
                 if cut is None:
                     break
 
-                # Emit a paragraph up to the end of the page number
                 cut_abs = local_start + cut
-                span = doc.char_span(local_start, cut_abs, label=PARAGRAPH_LABEL, alignment_mode="contract")
-                if span is not None:
-                    spans.append(span)
+                s_emit, e_emit, clipped = clip_to_before_protected(local_start, cut_abs)
+                if e_emit > s_emit:
+                    span = doc.char_span(s_emit, e_emit, label=PARAGRAPH_LABEL, alignment_mode="contract")
+                    if span is not None:
+                        spans.append(span)
 
-                # Advance to the next non-space char after the cut (the next TOC item)
+                # Advance to the next non-space char after the cut
                 local_start = cut_abs
                 while local_start < end and text[local_start].isspace():
                     local_start += 1
                 local_slice = text[local_start:end]
 
+                # If we clipped due to protection starting exactly at or before local_start,
+                # stop splitting here; remaining content will be handled by the normal loop.
+                if clipped and local_start >= end:
+                    break
+
             # If we produced at least one intra-entity paragraph and consumed the whole slice, skip normal merge.
             if local_start > start:
                 if local_start < end:
-                    # There is remaining text in this entity; continue with normal merging from here
                     start = local_start
                     last_piece = text[start:end]
                 else:
-                    # Entire slice was consumed by intra-entity splits; move on to next entity
                     i += 1
                     continue
-            # --- END NEW ---
+            # --- END intra-entity splits --------------------------------------
 
             j = i
             # Concatenate TEXT ents; allow continuation if next line starts lowercase.
@@ -160,7 +193,7 @@ def paragraph_entity(doc):
 
                 nxt_slice = text[nxt.start_char:nxt.end_char]
 
-                # Re-enable guard: do not merge into lists/bullets
+                # do not merge into lists/bullets
                 if _looks_like_list_start(nxt_slice):
                     break
 
@@ -168,12 +201,16 @@ def paragraph_entity(doc):
                 nxt_lead = _leading_alpha_case_or_none(nxt_slice)
 
                 # If current ends with . ! ? (or leader+page) but next starts lowercase, treat as wrapped continuation.
-                # NOTE: Leader+page considered a HARD stop at end-of-line by _ends_with_terminator;
-                # this lowercase exception should NOT override a forced split that already happened inside the same entity.
                 if ends_like_sentence and nxt_lead == 'lower' and not _ends_with_ellipsis(last_piece):
                     ends_like_sentence = False
 
                 if ends_like_sentence:
+                    break
+
+                # STOP merging if we'd cross into a protected span in the gap or by extending
+                if gap_has_protected(end, nxt.start_char):
+                    break
+                if first_overlap(start, nxt.end_char) is not None:
                     break
 
                 # extend paragraph to include next TEXT line
@@ -181,9 +218,13 @@ def paragraph_entity(doc):
                 last_piece = nxt_slice
                 j = k
 
-            span = doc.char_span(start, end, label=PARAGRAPH_LABEL, alignment_mode="contract")
-            if span is not None:
-                spans.append(span)
+            # Before emitting final paragraph, clip to avoid overlap with protected
+            s_emit, e_emit, clipped = clip_to_before_protected(start, end)
+            if e_emit > s_emit:
+                span = doc.char_span(s_emit, e_emit, label=PARAGRAPH_LABEL, alignment_mode="contract")
+                if span is not None:
+                    spans.append(span)
+
             i = j + 1
         else:
             i += 1

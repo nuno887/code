@@ -245,7 +245,10 @@ class RelationExtractorSerieIII:
 
 
 
-def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
+def export_serieIII_items_minimal_json(
+    relations: Iterable["Relation"],
+    render: Literal["none", "markdown"] = "none",
+) -> dict:
     """
     Compact III Série builder (returns a Python dict):
       - Top-level "orgs": [{id, text, label}]
@@ -258,22 +261,25 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
       - Keep if it has any letter; or matches "n.º ..." style references.
       - Delete if it's just numbers/symbols (e.g., "9 10 12", "4/2025", "---"), unless it’s "n.º ...".
       - Normalize dot leaders "......" → ".", collapse dash runs.
+
+    If render == "markdown", the returned dict includes an extra key:
+      - "markdown": a deduplicated, display-ready Markdown string
     """
     from collections import OrderedDict
     import re
 
     # Accept things like: "n.º 6/2025", "N.º12", "No. 3/2024", "nº 12"
     _N_DOT_NUM_RE = re.compile(
-    r"""(?ix)
-    \b
-    n
-    \s*
-    (?:[.\u00BA\u00B0o]\s*){0,2}   # allow ".", "º", "°", "o" in any order, up to two (covers "n.º")
-    \d+
-    (?:\s*/\s*\d+)?                # optional /year
-    \b
-    """
-)
+        r"""(?ix)
+        \b
+        n
+        \s*
+        (?:[.\u00BA\u00B0o]\s*){0,2}   # allow ".", "º", "°", "o" in any order, up to two (covers "n.º")
+        \d+
+        (?:\s*/\s*\d+)?                # optional /year
+        \b
+        """
+    )
 
     # Sequences of ≥3 dots/ellipsis → single period
     _DOT_LEADER_RE = re.compile(r"[.\u2026·]{3,}")
@@ -287,13 +293,20 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
         (?<!\w)
         \(?
         \s*
-        \d+(?:[.,]\d+)?(?:/\d+)?   # 22 | 3.14 | 4/2025
+        \d+(?:[.,]\d+)?(?:/\d+)?   # 22 | 3.14 | 4/2025 | 12/2024
         \s*
         \)?
         (?!\s*[º°])                # don't match when followed by º/°
         (?!\w)
         """
     )
+    _LEADING_LIST_PREFIX_RE = re.compile(r"""(?x)
+    ^\s*
+    (?:\(?\d+\)?(?:\s+\(?\d+\)?){0,3})   # up to 4 numbers like: 3 or 3 4 or (3) (4)
+    \s*[-–—]\s*                          # followed by a dash
+""")
+
+    
 
     def _clean_child_text(text: str) -> str | None:
         if text is None:
@@ -301,6 +314,9 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
         t = text.strip()
         if not t:
             return None
+        
+        # 1) ALWAYS remove leading list prefixes like "3 4 - "
+        t = _LEADING_LIST_PREFIX_RE.sub("", t)
 
         # If it already matches an allowed "n.º …" pattern, keep with light normalization
         if _N_DOT_NUM_RE.search(t):
@@ -395,4 +411,50 @@ def export_serieIII_items_minimal_json(relations: Iterable["Relation"]) -> dict:
         items.append(item)
 
     payload = {"orgs": orgs_out, "items": items}
+
+    # --- Optional: attach Markdown rendering (deduped, display-ready)
+    if render == "markdown":
+        org_lookup = {o["id"]: o for o in payload.get("orgs", [])}
+        lines = []
+
+        for item in payload.get("items", []):
+            pid = item.get("paragraph_id")
+            org_ids = item.get("org_ids", [])
+            orgs = [org_lookup[oid]["text"] for oid in org_ids if oid in org_lookup]
+
+            # Header
+            lines.append(f"### Parágrafo {pid}" if pid is not None else "### Parágrafo (sem id)")
+
+            # ORGs (unique, inline)
+            if orgs:
+                uniq_orgs = []
+                seen = set()
+                for o in orgs:
+                    if o not in seen:
+                        seen.add(o)
+                        uniq_orgs.append(o)
+                lines.append(f"**Entidade(s):** {', '.join(uniq_orgs)}")
+
+            # DOC_NAME
+            doc_name = item.get("doc_name")
+            if doc_name is not None:
+                lines.append(f"**Documento:** {doc_name.get('text','').strip()}")
+            else:
+                lines.append("**Documento:** (não identificado)")
+
+            # Children
+            children = item.get("children", [])
+            if children:
+                lines.append("**Conteúdo:**")
+                for ch in children:
+                    child_txt = ch.get("child", "").strip()
+                    if child_txt:
+                        lines.append(f"- {child_txt}")
+            else:
+                lines.append("_Sem conteúdo associado_")
+
+            lines.append("")  # blank line between paragraphs
+
+        payload["markdown"] = "\n".join(lines)
+
     return payload
