@@ -4,7 +4,7 @@ from spacy.language import Language
 from spacy.util import filter_spans
 import DocText
 import Paragraphs
-import entity_bold
+
 
 OPTIONS = {"colors": {
     "Sumario": "#ffd166",
@@ -540,7 +540,35 @@ def split_org_with_star(doc):
         doc.ents = tuple(keep)
     return doc
 
+# ===================================================================================
+# resolves the problem in ISerie-051-2010-06-25sup4.pdf
 
+import re
+from spacy.language import Language
+from spacy.tokens import Span
+
+@Language.factory("orglabel_to_paragraph_sanitizer")
+def create_orglabel_to_paragraph_sanitizer(nlp, name):
+    patt = re.compile(r"[.,\-]|\d")  # dot, comma, hyphen, or any digit
+    PARAGRAPH = nlp.vocab.strings.add("PARAGRAPH")  # ensure label exists
+
+    def component(doc):
+        new_ents = []
+        for ent in doc.ents:
+            # compare by string label to avoid StringStore lookups
+            if ent.label_ == "ORG_LABEL" and patt.search(ent.text):
+                new_ents.append(Span(doc, ent.start, ent.end, label=PARAGRAPH))
+            else:
+                new_ents.append(ent)
+        doc.ents = tuple(new_ents)
+        return doc
+
+    return component
+
+
+
+
+# ===================================================================================
 
 def setup_entities(nlp, SerieIII: bool):
 
@@ -557,5 +585,6 @@ def setup_entities(nlp, SerieIII: bool):
     nlp.add_pipe("paragraph_entity")
     nlp.add_pipe("paragraph_to_org_star")
     nlp.add_pipe("split_org_with_star")
+    nlp.add_pipe("orglabel_to_paragraph_sanitizer")
 
         
