@@ -571,6 +571,7 @@ def create_orglabel_to_paragraph_sanitizer(nlp, name):
 # ===================================================================================
 
 # ===================================================================================
+#resolves the probem in ISerie-031-2020-02-19sup.pdf (Sumario)
 from spacy.language import Language
 from spacy.tokens import Span
 
