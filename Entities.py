@@ -559,5 +559,3 @@ def setup_entities(nlp, SerieIII: bool):
     nlp.add_pipe("split_org_with_star")
 
         
-
-

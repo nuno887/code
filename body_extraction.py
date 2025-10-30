@@ -423,10 +423,10 @@ def divide_body_by_org_and_docs(
             return bend
 
         # Sequential name matching; if zero matches but headers exist, slice all headers
-        json_doc_names = [normalize_text(d.get("text", "")) for d in json_docs]
+        json_doc_names = [normalize_doc_title(d.get("text", "")) for d in json_docs]
         i_ptr = 0
         for jdoc_raw, jdoc_norm in zip([d.get("text", "") for d in json_docs], json_doc_names):
-            while i_ptr < len(docname_spans_sorted) and normalize_text(docname_spans_sorted[i_ptr].text) != jdoc_norm:
+            while i_ptr < len(docname_spans_sorted) and normalize_doc_title(docname_spans_sorted[i_ptr].text) != jdoc_norm:
                 i_ptr += 1
             if i_ptr < len(docname_spans_sorted):
                 head_span = docname_spans_sorted[i_ptr]
@@ -667,6 +667,27 @@ def divide_body_by_org_and_docs(
     }
     return results, summary
 
+
+def normalize_doc_title(s: str) -> str:
+    """
+    Canonicalize DOC headers for matching. We *remove* the 'nº/n./no./n.º' token
+    and keep a single space before the number. Also normalize slash spacing.
+    """
+    if s is None:
+        return ""
+    s = normalize_text(s)  # your existing: strip **, collapse spaces, join spaced caps
+
+    # Remove the Portuguese numbering token before a digit:
+    # matches: n, n., nº, n.º, no., n°, with optional hyphen/space, if followed by a digit
+    s = re.sub(r"(?i)\b n \s* (?: [\.\-]\s* )? (?: º | o | ° )? \s* (?=\d)", "", s, flags=re.X)
+
+    # Ensure exactly one space before the number (after removing the token)
+    s = re.sub(r"(?<=\D)\s*(?=\d)", " ", s)
+
+    # Normalize spaces around slashes in numbers like '586 / 2003' -> '586/2003'
+    s = re.sub(r"\s*/\s*", "/", s)
+
+    return s.strip()
 
 
 
