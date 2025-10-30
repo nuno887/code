@@ -418,12 +418,14 @@ def divide_body_by_org_and_docs(
 
         def _slice_end(start_char: int) -> int:
             for s in docname_spans_sorted:
-                if s.start_char > start_char:
+                if s.start_char > start_char and normalize_doc_title(s.text) in json_name_set:
                     return s.start_char
             return bend
 
+
         # Sequential name matching; if zero matches but headers exist, slice all headers
         json_doc_names = [normalize_doc_title(d.get("text", "")) for d in json_docs]
+        json_name_set = set(json_doc_names)
         i_ptr = 0
         for jdoc_raw, jdoc_norm in zip([d.get("text", "") for d in json_docs], json_doc_names):
             while i_ptr < len(docname_spans_sorted) and normalize_doc_title(docname_spans_sorted[i_ptr].text) != jdoc_norm:
@@ -441,17 +443,47 @@ def divide_body_by_org_and_docs(
                 unmatched_docs.append(jdoc_raw)
 
         # Brutal fallback: slice all headers if no name-matches but headers exist
+        # Brutal fallback improvements
         if not matched_slices and docname_spans_sorted:
-            if verbose:
-                print(f"[INFO] Fallback: slicing {len(docname_spans_sorted)} docs by body headers for ORG {org_label_text_raw!r}")
-            for h in docname_spans_sorted:
-                start = h.start_char
-                end = _slice_end(start)
-                matched_slices.append(DocSlice(
-                    doc_name=_strip_markdown_bold(h.text).strip(),
-                    text=doc_text[start:end]
-                ))
-            unmatched_docs = [d.get("text", "") for d in json_docs]
+            # Prefer only headers that appear in JSON
+            matching_headers = [h for h in docname_spans_sorted if normalize_doc_title(h.text) in json_name_set]
+
+            if matching_headers:
+                if verbose:
+                    print(f"[INFO] Fallback: slicing {len(matching_headers)} matching headers for ORG {org_label_text_raw!r}")
+                for h in matching_headers:
+                    start = h.start_char
+                    end = _slice_end(start)
+                    matched_slices.append(DocSlice(
+                        doc_name=_strip_markdown_bold(h.text).strip(),
+                        text=doc_text[start:end]
+                    ))
+                # Any JSON docs that didn't get a body slice
+                matched_norms = {normalize_doc_title(h.text) for h in matching_headers}
+                unmatched_docs = [d.get("text", "") for d in json_docs if normalize_doc_title(d.get("text", "")) not in matched_norms]
+            else:
+                # If JSON expects exactly 1 doc, take the whole block (common in title+date cases)
+                if len(json_docs) == 1:
+                    jdoc_raw = json_docs[0].get("text", "")
+                    matched_slices = [DocSlice(
+                        doc_name=_strip_markdown_bold(jdoc_raw).strip(),
+                        text=doc_text[bstart:bend]
+                    )]
+                    unmatched_docs = []
+                else:
+                    # Fall back to old behavior (slice all headers) OR mark doc_missing.
+                    # Old behavior:
+                    if verbose:
+                        print(f"[INFO] Fallback: slicing all {len(docname_spans_sorted)} headers for ORG {org_label_text_raw!r}")
+                    for h in docname_spans_sorted:
+                        start = h.start_char
+                        end = _slice_end(start)
+                        matched_slices.append(DocSlice(
+                            doc_name=_strip_markdown_bold(h.text).strip(),
+                            text=doc_text[start:end]
+                        ))
+                    unmatched_docs = [d.get("text", "") for d in json_docs]
+
 
         # Status
         if len(json_docs) == 0:
