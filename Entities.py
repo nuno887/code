@@ -541,7 +541,7 @@ def split_org_with_star(doc):
     return doc
 
 # ===================================================================================
-# resolves the problem in ISerie-051-2010-06-25sup4.pdf
+# resolves the problem in ISerie-051-2010-06-25
 
 import re
 from spacy.language import Language
@@ -549,7 +549,7 @@ from spacy.tokens import Span
 
 @Language.factory("orglabel_to_paragraph_sanitizer")
 def create_orglabel_to_paragraph_sanitizer(nlp, name):
-    patt = re.compile(r"[.,\-]|\d")  # dot, comma, hyphen, or any digit
+    patt = re.compile(r"[.]|\d")  # dot, comma, hyphen, or any digit
     PARAGRAPH = nlp.vocab.strings.add("PARAGRAPH")  # ensure label exists
 
     def component(doc):
