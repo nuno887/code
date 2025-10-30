@@ -456,13 +456,97 @@ def paragraph_to_org_star(doc):
     return doc
 
 
+# --- NEW: split org-with-star heading + company into separate entities ---
+from spacy.language import Language
+from spacy.util import filter_spans
+
+# Words that suggest the first bold block is a header/topline (normalize & casefold before comparing)
+_ORG_HEADER_HINTS = {
+    "funchal",
+    "conservatoria",
+    "registo",
+    "comercial",
+    "madeira",
+    "portugal",
+    "camara",
+    "municipal",
+    "servico",
+    "servicos",
+    "direcao",
+    "direccao",
+    "direcção",
+    "direção",
+    "regional",
+    "nacional",
+    "ministerio",
+    "ministério",
+    "governo",
+}
+# Characters that must NOT appear in the first bold block if we are to split
+_DISALLOWED_IN_FIRST = {"-", "%", "&"}
+
+def _contains_any_keyword(s: str, keywords: set[str]) -> bool:
+    sn = _normalize_for_match(s)  # strip accents, collapse spaces, casefold
+    # because _normalize_for_match removes spaces, we do a simple containment test per keyword
+    # keywords in this set are simple words; we check any of them appear
+    for kw in keywords:
+        if kw in sn:
+            return True
+    return False
+
+@Language.component("split_org_with_star")
+def split_org_with_star(doc):
+    text = doc.text
+    keep = []
+    add_spans = []
+
+    for e in doc.ents:
+        if e.label_ != "ORG_WITH_STAR_LABEL":
+            keep.append(e)
+            continue
+
+        segment = text[e.start_char:e.end_char]
+
+        # Find **...** pairs inside this span
+        bold_matches = list(_BOLD_PAIR_RE.finditer(segment))
+        if len(bold_matches) < 2:
+            # nothing to split
+            keep.append(e)
+            continue
+
+        # Inspect the FIRST bold block
+        first_m = bold_matches[0]
+        first_inner = segment[first_m.start()+2:first_m.end()-2]
+
+        # Rule: first must NOT contain any of the disallowed chars, and MUST contain a hint word
+        if (any(ch in _DISALLOWED_IN_FIRST for ch in first_inner)
+            or not _contains_any_keyword(first_inner, _ORG_HEADER_HINTS)):
+            # do not split; keep original
+            keep.append(e)
+            continue
+
+        # Split: create one ORG_WITH_STAR_LABEL per bold block (keeping the ** in the span)
+        for m in bold_matches:
+            os = e.start_char + m.start()       # outer start (**)
+            oe = e.start_char + m.end()         # outer end (after **)
+            span = doc.char_span(os, oe, label="ORG_WITH_STAR_LABEL", alignment_mode="expand")
+            if span is not None:
+                add_spans.append(span)
+        # Do NOT keep the original combined span (we replaced it)
+
+    if add_spans:
+        doc.ents = filter_spans(keep + add_spans)
+    else:
+        doc.ents = tuple(keep)
+    return doc
+
 
 
 def setup_entities(nlp, SerieIII: bool):
 
     ruler = nlp.add_pipe("entity_ruler", first = True)
     ruler.add_patterns(RULER_PATTERNS)
-    nlp.add_pipe("allcaps_entity_02")
+    nlp.add_pipe("allcaps_entity")
     if SerieIII:
         nlp.add_pipe("docname_entity_III")
     else:
@@ -472,7 +556,8 @@ def setup_entities(nlp, SerieIII: bool):
     # nlp.add_pipe("strip_junk_ents")
     nlp.add_pipe("paragraph_entity")
     nlp.add_pipe("paragraph_to_org_star")
-    
+    nlp.add_pipe("split_org_with_star")
+
         
 
 
