@@ -170,7 +170,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-249-2005-12-30Supl008.pdf",
+        default="IISerie-099-2005-05-23Supl.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -199,7 +199,7 @@ def main():
    
  
     # 4) Split body (Serie III uses our new splitter)
-    results, summary = split_body(doc, payload, serie_iii, nlp)
+    results, summary = split_body(doc_body, payload, serie_iii, nlp)
 
     print("============== MAIN =====================")
 

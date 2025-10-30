@@ -4,6 +4,7 @@ from spacy.language import Language
 from spacy.util import filter_spans
 import DocText
 import Paragraphs
+import entity_bold
 
 OPTIONS = {"colors": {
     "Sumario": "#ffd166",
@@ -404,13 +405,64 @@ def junk_entity(doc):
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
 
+import re
+from spacy.language import Language
+from spacy.util import filter_spans
+
+_BOLD_PAIR_RE = re.compile(r"\*\*.+?\*\*", re.DOTALL)
+
+def _overlaps(a_s, a_e, b_s, b_e):
+    return (a_s < b_e) and (b_s < a_e)
+
+@Language.component("paragraph_to_org_star")
+def paragraph_to_org_star(doc):
+    text = doc.text
+    new_spans = []
+
+    for e in doc.ents:
+        if e.label_ != "PARAGRAPH":
+            continue
+
+        segment = text[e.start_char:e.end_char]
+
+        # 🔸 Skip paragraphs that have any lowercase (Unicode-aware)
+        # This ensures we only process ALL-CAPS paragraphs.
+        if any(ch.islower() for ch in segment):
+            continue
+
+        # Find all **…** pairs inside this ALL-CAPS paragraph
+        for m in _BOLD_PAIR_RE.finditer(segment):
+            inner = segment[m.start()+2 : m.end()-2]
+            if _eligible_line(inner):
+                os = e.start_char + m.start()
+                oe = e.start_char + m.end()
+                span = doc.char_span(os, oe, label="ORG_WITH_STAR_LABEL", alignment_mode="expand")
+                if span is not None:
+                    new_spans.append(span)
+
+    if not new_spans:
+        return doc
+
+    kept = []
+    for e in doc.ents:
+        if e.label_ != "PARAGRAPH":
+            kept.append(e)
+            continue
+        if any(_overlaps(e.start_char, e.end_char, s.start_char, s.end_char) for s in new_spans):
+            continue
+        kept.append(e)
+
+    doc.ents = filter_spans(kept + new_spans)
+    return doc
+
+
 
 
 def setup_entities(nlp, SerieIII: bool):
 
     ruler = nlp.add_pipe("entity_ruler", first = True)
     ruler.add_patterns(RULER_PATTERNS)
-    nlp.add_pipe("allcaps_entity")
+    nlp.add_pipe("allcaps_entity_02")
     if SerieIII:
         nlp.add_pipe("docname_entity_III")
     else:
@@ -419,6 +471,8 @@ def setup_entities(nlp, SerieIII: bool):
     nlp.add_pipe("doc_text_entity")
     # nlp.add_pipe("strip_junk_ents")
     nlp.add_pipe("paragraph_entity")
+    nlp.add_pipe("paragraph_to_org_star")
+    
         
 
 

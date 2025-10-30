@@ -45,6 +45,14 @@ ORG_LIKE_LABELS = {"ORG_LABEL", "ORG_WITH_STAR_LABEL"}
 SUMARIO_LABEL = "Sumario"
 
 
+def _gap_has_letters(text: str) -> bool:
+    # True if the gap includes at least one Unicode letter
+    for ch in unicodedata.normalize("NFKD", text):
+        if not unicodedata.combining(ch) and ch.isalpha():
+            return True
+    return False
+
+
 def _normalize_for_match_letters_only(s: str) -> str:
     """Normalize a string for matching org names using letters-only semantics."""
     if s is None:
@@ -154,38 +162,57 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
     meta["first_org_raw"] = first_org_raw
     meta["first_org_norm"] = first_org_norm
 
-    # 3) Scan subsequent org-like entities for the first repeat
-    #    - Exact match: boundary at ent.start_char
-    #    - Embedded match: boundary at BEGINNING of inner match within the larger span
+        # 3) Scan subsequent org-like entities for the first repeat
+    #    Now supports repeats that are split across multiple adjacent org-like spans.
     boundary_ent = None
     provisional_boundary = None  # before empty-line adjustment
 
-    for ent in orgs_after[1:]:
-        raw = ent.text
-        cur_norm = _normalize_for_match_letters_only(raw)
+    i = 1  # start from the entity after the first_org
+    n = len(orgs_after)
+    while i < n:
+        # Start a run at orgs_after[i]
+        run_start_ent = orgs_after[i]
+        run_start = int(run_start_ent.start_char)
+        run_end = int(run_start_ent.end_char)
+        j = i
+
+        # Extend the run while the gap between entities has no letters
+        while (j + 1) < n:
+            next_ent = orgs_after[j + 1]
+            gap = text[run_end:int(next_ent.start_char)]
+            if _gap_has_letters(gap):
+                break
+            # merge
+            run_end = int(next_ent.end_char)
+            j += 1
+
+        # Build letters-only stream + index map for the whole run slice
+        run_raw_slice = text[run_start:run_end]
+        stream, idx_map = _letters_only_with_index_map(run_raw_slice, run_start)
+        pos = stream.find(first_org_norm)
 
         if debug:
-            print(f"[ORG SCAN] first={first_org_norm!r} vs cur={cur_norm!r} | raw={raw!r}")
+            raw_debug = run_raw_slice.replace("\n", "\\n")
+            print(f"[ORG RUN] i={i}..{j}, pos={pos}, slice_raw={raw_debug!r}")
 
-        # Case A) exact match -> boundary at entity start
-        if cur_norm == first_org_norm:
-            boundary_ent = ent
-            provisional_boundary = int(ent.start_char)
+        if pos != -1:
+            # Found the repeated key inside this run
+            boundary_ent = orgs_after[j]  # last ent in the run (for meta only)
+            provisional_boundary = int(idx_map[pos])
+
+            # For meta: record the combined run text/norm
+            meta["boundary_org_raw"] = run_raw_slice
+            meta["boundary_org_norm"] = _normalize_for_match_letters_only(run_raw_slice)
             break
 
-        # Case B) key embedded inside this larger org span -> boundary at BEGINNING of inner match
-        if first_org_norm and cur_norm and (first_org_norm in cur_norm):
-            stream, idx_map = _letters_only_with_index_map(raw, int(ent.start_char))
-            pos = stream.find(first_org_norm)
-            if pos != -1:
-                boundary_ent = ent
-                provisional_boundary = int(idx_map[pos])
-                break
+        # No match in this run → move to the next run
+        i = j + 1
 
     if boundary_ent is None:
         meta["reason"] = "no_repeat_match"
         sumario_text = text[seen_sumario_end:]
         return sumario_text, "", meta
+
 
     # 4) Adjust boundary to the last empty line before the provisional boundary
     adjusted = _last_empty_line_before(text, seen_sumario_end, provisional_boundary)
