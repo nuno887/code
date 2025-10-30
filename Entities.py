@@ -24,7 +24,7 @@ RULER_PATTERNS = [
 {"label": "Sumario", "pattern": "**Sumario**"},
 {"label": "Sumario",
  "pattern": [
-   {"LOWER": {"IN": ["sumário", "sumario"]}},
+   {"TEXT": {"IN": ["Sumário", "Sumario"]}},
    {"ORTH": ":", "OP": "!"}
  ]},
 
@@ -541,7 +541,7 @@ def split_org_with_star(doc):
     return doc
 
 # ===================================================================================
-# resolves the problem in ISerie-051-2010-06-25
+# resolve the problem in ISerie-051-2010-06-25
 
 import re
 from spacy.language import Language
@@ -549,7 +549,7 @@ from spacy.tokens import Span
 
 @Language.factory("orglabel_to_paragraph_sanitizer")
 def create_orglabel_to_paragraph_sanitizer(nlp, name):
-    patt = re.compile(r"[.]|\d")  # dot, comma, hyphen, or any digit
+    patt = re.compile(r"[.;]|\d")  # dot, comma, hyphen, or any digit
     PARAGRAPH = nlp.vocab.strings.add("PARAGRAPH")  # ensure label exists
 
     def component(doc):
@@ -570,6 +570,53 @@ def create_orglabel_to_paragraph_sanitizer(nlp, name):
 
 # ===================================================================================
 
+# ===================================================================================
+from spacy.language import Language
+from spacy.tokens import Span
+
+@Language.factory("concat_doc_name_label")
+def create_concat_doc_name_label(nlp, name):
+    DOC_NAME = nlp.vocab.strings.add("DOC_NAME_LABEL")
+
+    def component(doc):
+        if not doc.ents:
+            return doc
+
+        ents = list(doc.ents)          # sorted by start
+        new_ents = []
+        i, n = 0, len(ents)
+
+        while i < n:
+            ent = ents[i]
+            if ent.label == DOC_NAME:
+                start = ent.start
+                end = ent.end
+                j = i + 1
+
+                # Merge ONLY if there's *only whitespace* between spans
+                while (
+                    j < n
+                    and ents[j].label == DOC_NAME
+                    and doc[end:ents[j].start].text.strip() == ""  # <-- key guard
+                ):
+                    end = ents[j].end
+                    j += 1
+
+                new_ents.append(Span(doc, start, end, label=DOC_NAME))
+                i = j
+            else:
+                new_ents.append(ent)
+                i += 1
+
+        doc.ents = tuple(new_ents)
+        return doc
+
+    return component
+
+
+
+# ===================================================================================
+
 def setup_entities(nlp, SerieIII: bool):
 
     ruler = nlp.add_pipe("entity_ruler", first = True)
@@ -579,6 +626,7 @@ def setup_entities(nlp, SerieIII: bool):
         nlp.add_pipe("docname_entity_III")
     else:
         nlp.add_pipe("docname_entity")
+        nlp.add_pipe("concat_doc_name_label")
     # nlp.add_pipe("junk_entity")
     nlp.add_pipe("doc_text_entity")
     # nlp.add_pipe("strip_junk_ents")
