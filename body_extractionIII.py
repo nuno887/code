@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 
 import spacy
 from spacy import displacy  # noqa: F401  (kept if you use it elsewhere)
-from Entities import setup_entities
+from spacy_modulo import setup_entities, get_nlp # the get_nlp is new we still need to add to the code
 
 import unicodedata
 import re

@@ -1,5 +1,5 @@
 import spacy
-from Entities import setup_entities
+from .Entities import setup_entities
 
 
 def get_nlp(disable_ner: bool = True, SerieIII: bool = True):

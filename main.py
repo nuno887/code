@@ -7,26 +7,17 @@ import html as html_lib
 
 from spacy import displacy
 
-from Entities import setup_entities, OPTIONS  # keep your OPTIONS for displacy
 from split_text import split_sumario_and_body
 
-"""
-from relations_extractor import (
-    RelationExtractor,
-    export_relations_items_minimal_json,
-)
-from relations_extractor_serieIII import (
-    RelationExtractorSerieIII,
-    export_serieIII_items_minimal_json,
-)
-"""
 from relation_extractor import RelationExtractor, RelationExtractorSerieIII, export_relations_items_minimal_json, export_serieIII_items_minimal_json
+
 from pdf_markup import extract_pdf_to_markdown
 
-# NEW: use our single factory + splitter
-# from serie3_splitter.nlp import get_nlp
-from get_nlp import get_nlp
+from spacy_modulo import get_nlp, setup_entities, OPTIONS
+
 from serie3_splitter import divide_body_by_org_and_docs_serieIII
+
+from body_extraction import divide_body_by_org_and_docs
 
 
 
@@ -82,7 +73,7 @@ def split_body(doc_body, payload, serie_iii: bool, nlp):
         )
     else:
         # Keep your Serie I/II path as-is if you still use it elsewhere
-        from body_extraction import divide_body_by_org_and_docs
+        
 
         results, summary = divide_body_by_org_and_docs(
             doc_body,
@@ -211,7 +202,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc_body, Path("ents.html"))
+    render_entities_html(doc, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")

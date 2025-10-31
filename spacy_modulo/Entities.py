@@ -2,8 +2,9 @@ from spacy.pipeline import EntityRuler
 import re, unicodedata
 from spacy.language import Language
 from spacy.util import filter_spans
-import DocText
-import Paragraphs
+from .DocText import *
+from .Paragraphs import *
+
 
 
 OPTIONS = {"colors": {
