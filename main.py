@@ -15,9 +15,9 @@ from pdf_markup import extract_pdf_to_markdown
 
 from spacy_modulo import get_nlp, setup_entities, OPTIONS
 
-from serie3_splitter import divide_body_by_org_and_docs_serieIII
+# from serie3_splitter import divide_body_by_org_and_docs_serieIII
 
-from body_extraction import divide_body_by_org_and_docs
+from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII
 
 
 
@@ -63,13 +63,13 @@ def extract_relations_and_payload(doc_sumario, serie_iii: bool):
     return rels, payload
 
 
-def split_body(doc_body, payload, serie_iii: bool, nlp):
+def split_body(doc_body, payload, serie_iii: bool):
     if serie_iii:
         # IMPORTANT: pass the same pipeline used to build doc_body
         results, summary = divide_body_by_org_and_docs_serieIII(
             doc_body,
             payload,
-            nlp=nlp,
+
         )
     else:
         # Keep your Serie I/II path as-is if you still use it elsewhere
@@ -165,7 +165,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="ISerie-139-2008-11-03.pdf",
+        default="IIISerie-05-2012-03-02.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -194,7 +194,7 @@ def main():
    
  
     # 4) Split body (Serie III uses our new splitter)
-    results, summary = split_body(doc_body, payload, serie_iii, nlp)
+    results, summary = split_body(doc_body, payload, serie_iii)
 
     print("============== MAIN =====================")
 
