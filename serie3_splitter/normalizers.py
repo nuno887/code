@@ -88,3 +88,57 @@ def _ocr_clean(s: str) -> str:
     s = _collapse_interletter_spacing(s)
     s = _normalize_unicode_spaces(s)
     return s
+
+# --- ADD BELOW YOUR EXISTING HELPERS IN normalizers.py ---
+
+import unicodedata
+import re
+
+_WS_RE = re.compile(r"\s+", re.UNICODE)
+
+# Canonicalize quotes/dashes/ellipsis to ASCII
+_SUBS = (
+    ("\u2013", "-"),  # en dash
+    ("\u2014", "-"),  # em dash
+    ("\u2018", "'"), ("\u2019", "'"),
+    ("\u201C", '"'), ("\u201D", '"'),
+    ("\u2026", "..."),  # ellipsis
+)
+
+def _normalize_title_for_match(s: str) -> str:
+    """
+    Strong canonicalization for *matching* titles only.
+    Keeps your original _normalize_title unchanged (good for display-ish cleanup).
+    """
+    if not s:
+        return ""
+
+    # 0) Your OCR/space cleanup pipeline
+    t = _ocr_clean(s)
+
+    # 1) Strip markdown/code markers anywhere
+    t = t.replace("**", "").replace("__", "").replace("_", "").replace("`", "")
+
+    # 2) Canonical punctuation/quotes/dashes
+    for src, dst in _SUBS:
+        t = t.replace(src, dst)
+
+    # 3) Remove stray spaces around punctuation
+    t = re.sub(r"\s+([.,;:!?)\]])", r"\1", t)  # no space before closing punct
+    t = re.sub(r"([(\[])\s+", r"\1", t)        # no space right after opening
+
+    # 4) Collapse duplicated punctuation artifacts
+    t = t.replace(" . .", ".").replace("..", ".").replace("--", "-").replace("::", ":")
+
+    # 5) Flatten all whitespace/newlines and trim
+    t = _WS_RE.sub(" ", t).strip()
+
+    # 6) Drop trailing light punctuation (so 'Direção:' == 'Direção')
+    t = t.rstrip(" .:;,-")
+
+    # 7) NFC + casefold for robust compare
+    t = unicodedata.normalize("NFC", t).casefold()
+
+    # 8) Final collapse/trim
+    t = _WS_RE.sub(" ", t).strip()
+    return t

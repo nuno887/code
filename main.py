@@ -8,7 +8,9 @@ import html as html_lib
 from spacy import displacy
 
 from Entities import setup_entities, OPTIONS  # keep your OPTIONS for displacy
-from Split_TEXT import split_sumario_and_body
+from split_text import split_sumario_and_body
+
+"""
 from relations_extractor import (
     RelationExtractor,
     export_relations_items_minimal_json,
@@ -17,11 +19,13 @@ from relations_extractor_serieIII import (
     RelationExtractorSerieIII,
     export_serieIII_items_minimal_json,
 )
-
+"""
+from relation_extractor import RelationExtractor, RelationExtractorSerieIII, export_relations_items_minimal_json, export_serieIII_items_minimal_json
 from pdf_markup import extract_pdf_to_markdown
 
 # NEW: use our single factory + splitter
-from serie3_splitter.nlp import get_nlp
+# from serie3_splitter.nlp import get_nlp
+from get_nlp import get_nlp
 from serie3_splitter import divide_body_by_org_and_docs_serieIII
 
 
@@ -170,7 +174,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-128-2005-07-06.pdf",
+        default="ISerie-139-2008-11-03.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -207,7 +211,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc, Path("ents.html"))
+    render_entities_html(doc_body, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")

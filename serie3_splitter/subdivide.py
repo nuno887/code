@@ -1,8 +1,10 @@
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .types import SubSlice
-from .normalizers import _normalize_title
+from .normalizers import _normalize_title_for_match
 from .matching import pick_canonical_from_block
+from .debug_seg_dump import dump_seg_bundle
+
 
 # -------- Debug helpers --------
 DEBUG = False
@@ -22,6 +24,14 @@ def _repr_gap_text(s: str, limit: int = 80) -> str:
 
 def reparse_seg_text(nlp, seg_text: str) -> List[Tuple[str, str, int, int]]:
     doc = nlp(seg_text)
+    
+
+    # AFTER: doc = nlp(seg_text)
+    for i, e in enumerate(doc.ents):
+        if getattr(e, "label_", "") == "DOC_NAME_LABEL":
+            norm = _normalize_title_for_match(e.text)
+            dbg("HEADER", i=i, span=(e.start_char, e.end_char), raw=e.text[:100], norm=norm)
+
     out: List[Tuple[str, str, int, int]] = []
     for e in doc.ents:
         label = getattr(e, "label_", "")
@@ -34,10 +44,10 @@ def allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
     titles: Set[str] = set()
 
     def _tight_key(s: str) -> str:
-        return _normalize_title(s).replace(" ", "").lower()
+        return _normalize_title_for_match(s).replace(" ", "").lower()
 
     for t in (item.get("allowed_children") or []):
-        t_norm = _normalize_title(str(t))
+        t_norm = _normalize_title_for_match(str(t))
         if t_norm:
             titles.add(t_norm)
 
@@ -52,7 +62,7 @@ def allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
         elif "child" in ch and ch.get("child"):
             raw = str(ch["child"])
             txt = " ".join(raw.split())
-        t_norm = _normalize_title(txt or "")
+        t_norm = _normalize_title_for_match(txt or "")
         if t_norm:
             titles.add(t_norm)
 
@@ -60,7 +70,7 @@ def allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
         if not isinstance(b, dict):
             continue
         if isinstance(b.get("doc_name"), dict) and b["doc_name"].get("text"):
-            t_norm = _normalize_title(b["doc_name"]["text"])
+            t_norm = _normalize_title_for_match(b["doc_name"]["text"])
             if t_norm:
                 titles.add(t_norm)
 
@@ -84,6 +94,7 @@ def subdivide_seg_text_by_allowed_headers(nlp, seg_text: str, allowed_titles: Se
     dbg("SUBDIVIDE_START", seg_len=len(seg_text), allowed_count=len(allowed_titles))
 
     doc = nlp(seg_text)
+    dump_seg_bundle(seg_text=seg_text, doc=doc, out_dir="debug_out", tag="subdivide", allowed_titles=allowed_titles)
     ents = sorted(list(doc.ents), key=lambda e: e.start_char)
 
     # Precompute a simple list for gap scans
@@ -112,7 +123,7 @@ def subdivide_seg_text_by_allowed_headers(nlp, seg_text: str, allowed_titles: Se
         if current_block:
             start = current_block[0].start_char
             end = current_block[-1].end_char
-            titles_norm = [_normalize_title(h.text) for h in current_block]
+            titles_norm = [_normalize_title_for_match(h.text) for h in current_block]
             header_blocks.append({
                 "headers": current_block[:],
                 "start": start,
@@ -179,6 +190,26 @@ def subdivide_seg_text_by_allowed_headers(nlp, seg_text: str, allowed_titles: Se
             if current_block:
                 dbg("NON_HEADER_FLUSH", seen_label=lab, text=e.text[:60])
             _flush_block(reason="non_header_seen")
+        
+    # =====================================================================================
+    # AFTER: ents and ent_index are computed (right after building `ents`)
+    for i, e in enumerate(doc.ents):
+        if getattr(e, "label_", "") == "DOC_NAME_LABEL":
+            norm = _normalize_title_for_match(e.text)
+            allowed = norm in allowed_titles
+            dbg("HEADER", i=i, span=(e.start_char, e.end_char), raw=e.text[:100], norm=norm, allowed=allowed)
+
+    # OPTIONAL tiny summary
+    hdr_count = sum(1 for e in doc.ents if getattr(e, "label_", "") == "DOC_NAME_LABEL")
+    hdr_match = sum(
+        1 for e in doc.ents
+        if getattr(e, "label_", "") == "DOC_NAME_LABEL" and _normalize_title_for_match(e.text) in allowed_titles
+    )
+    dbg("HEADER_SUMMARY", total=hdr_count, matched=hdr_match)
+
+
+    
+    # =====================================================================================
 
     _flush_block(reason="end_of_ents")
 

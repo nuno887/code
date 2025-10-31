@@ -2,7 +2,7 @@ from typing import List, Optional, Set, Tuple
 
 from .config import LETTERS_MIN_RATIO, NGRAM_N, NGRAM_JACCARD_MIN, MIN_LEN_FOR_NGRAMS
 from .normalizers import (
-    _normalize_title,
+    _normalize_title_for_match,
     _tighten,
     _letters_only,
     _char_ngrams,
@@ -43,14 +43,14 @@ def pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str])
     prepared_allowed: List[Tuple[str, str, str, str]] = []
     for t in allowed_titles:
         t_clean = _ocr_clean(t)
-        t_norm = _normalize_title(t_clean)
+        t_norm = _normalize_title_for_match(t_clean)
         t_tight = _tighten(t_norm)
         t_letters = _letters_only(t_norm)
         prepared_allowed.append((t, t_norm, t_tight, t_letters))
 
     # --- Block-level ---
     block_join = _ocr_clean("\n".join(block_titles))
-    bj_norm = _normalize_title(block_join)
+    bj_norm = _normalize_title_for_match(block_join)
     bj_tight = _tighten(bj_norm)
     bj_letters = _letters_only(bj_norm)
 
@@ -111,7 +111,7 @@ def pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str])
 
     # --- Per-line fallback ---
     for bt_raw in block_titles:
-        bt_norm = _normalize_title(_ocr_clean(bt_raw))
+        bt_norm = _normalize_title_for_match(_ocr_clean(bt_raw))
         bt_tight = _tighten(bt_norm)
         bt_letters = _letters_only(bt_norm)
 

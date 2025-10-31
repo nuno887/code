@@ -4,7 +4,17 @@ from .types import OrgResult, DocSlice
 from .windows import collect_org_windows_from_ents, match_org_to_window
 from .headers import match_doc_type_headers, compute_next_bounds_per_window, doc_type_key
 from .subdivide import reparse_seg_text, subdivide_seg_text_by_allowed_headers, allowed_child_titles_for_item
-from .normalizers import _normalize_title
+from .normalizers import _normalize_title_for_match
+
+# ================================================================
+DEBUG = True
+def dbg(tag: str, **kv):
+    if not DEBUG:
+        return
+    parts = ", ".join(f"{k}={repr(v)}" for k, v in kv.items())
+    print(f"[{tag}] {parts}")
+
+# ================================================================
 
 
 def _build_org_map(payload: Dict[str, Any]) -> Dict[int, str]:
@@ -65,10 +75,33 @@ def divide_body_by_org_and_docs_serieIII(
 
         for item in items:
             title_raw = (item.get("doc_name") or {}).get("text") or ""
-            title = _normalize_title(title_raw)
+            title = _normalize_title_for_match(title_raw)
             key = doc_type_key(item)
 
             mt = doc_type_matches.get(key)
+# =========================================================================
+            # After: mt = doc_type_matches.get(key)
+            if mt is not None:
+                matched_raw = (doc_body.text[mt["start"]:mt["end"]] or "")[:200].replace("\n", "\\n")
+                matched_norm = _normalize_title_for_match(matched_raw)
+                parent_norm = title  # already normalized from above
+                allowed_children = allowed_child_titles_for_item(item)
+                is_parent_match = (matched_norm == parent_norm)
+                is_child_like = (matched_norm in allowed_children)
+
+                dbg("ANCHOR_MATCH",
+                    item_title_raw=(item.get("doc_name") or {}).get("text") or "",
+                    item_title_norm=parent_norm,
+                    matched_preview=matched_raw,
+                    matched_norm=matched_norm,
+                    is_parent_match=is_parent_match,
+                    is_child_like=is_child_like,
+                    window_index=mt.get("window_index"),
+                    confidence=mt.get("confidence", 1.0),
+                )
+
+
+# =========================================================================
 
             # Branch: items without doc_name → segment over org window and subdivide children
             if mt is None and not title and win_idx is not None:
@@ -114,6 +147,45 @@ def divide_body_by_org_and_docs_serieIII(
             content_start = header_end  # exclude header text from segment
             seg_text = doc_body.text[content_start:end]
 
+# =========================================================================
+            # After start/end/header_end/content_start have been computed, just before seg_text
+            win_for_item = mt.get("window_index")
+            win_start = org_windows[win_for_item]["start"] if win_for_item is not None else None
+            win_end = org_windows[win_for_item]["end"] if win_for_item is not None else None
+
+            dbg("SLICE_BOUNDS",
+                start=start,
+                header_end=mt.get("end", start),
+                content_start=header_end,
+                end=end,
+                window_start=win_start,
+                window_end=win_end,
+                slice_len=(end - header_end),
+            )
+
+# =========================================================================
+# =========================================================================
+            # After: seg_text = doc_body.text[content_start:end]
+            allowed = allowed_child_titles_for_item(item)
+            norm_seg = _normalize_title_for_match(seg_text)
+            norm_allowed = [t for t in allowed]  # already normalized by allowed_child_titles_for_item
+            found_children = [t for t in norm_allowed if t and t in norm_seg]
+
+            dbg("CHILD_SCAN",
+                allowed_count=len(norm_allowed),
+                found_count=len(found_children),
+                found_examples=found_children[:5],
+            )
+
+            # Optional guardrail: warn if we expected many children but found none
+            if len(norm_allowed) >= 2 and len(found_children) == 0:
+                dbg("WIDEN_SUGGEST",
+                    reason="No allowed children detected inside seg_text",
+                    hint="Anchor may be on a child; consider widening to window or including header text",
+                )
+
+# =========================================================================
+
             ds = DocSlice(
                 doc_name=title,
                 text=seg_text,
@@ -130,6 +202,21 @@ def divide_body_by_org_and_docs_serieIII(
 
             org_result.docs.append(ds)
             total_slices += 1
+
+# =============================================================================
+            # Right before subdividing the preamble segment
+            allowed = allowed_child_titles_for_item(item)
+            norm_seg = _normalize_title_for_match(seg_text)
+            found_children = [t for t in allowed if t and t in norm_seg]
+
+            dbg("PREAMBLE_CHILD_SCAN",
+                allowed_count=len(allowed),
+                found_count=len(found_children),
+                found_examples=found_children[:5],
+            )
+
+
+# =============================================================================
 
         results.append(org_result)
 
