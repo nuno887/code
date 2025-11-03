@@ -36,7 +36,7 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     allowed_tight = [tight(o) for o in allowed_orgs]
     allowed_toksets = [toks(o) for o in allowed_orgs]
 
-    # ✅ Only consider actual org banners as window anchors
+    
     ACCEPT = {"ORG_LABEL", "ORG_WITH_STAR_LABEL"}
 
     ents_sorted = sorted(
