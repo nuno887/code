@@ -162,15 +162,12 @@ def render_results_html(results, summary, out_path: Path):
 
 
 
-
-
-
 def main():
     parser = argparse.ArgumentParser(description="Process a Serie I/II/III/IV PDF.")
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-130-2025-07-22Supl2.pdf",
+        default="IIISerie-004-2025-02-27.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
