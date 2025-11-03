@@ -43,12 +43,26 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     [e for e in doc_body.ents if getattr(e, "label_", None) in ACCEPT],
     key=lambda e: e.start_char
 )
+    
 
     # Filter to those that actually match an allowed org (tight/overlap)
     kept: List[Tuple[int, int, str]] = []
+    MIN_LETTERS = 8 # reject tiny/roman numerals
+    MIN_TOKENS =  2 # require at least two tokens
+    MIN_SUBSTR = 10 # only allow substring matches when long enough
     for e in ents_sorted:
         txt = e.text
+        cand_norm = norm(txt)
         cand_tight = tight(txt)
+
+        # quality gates
+        letters_only = "".join(ch for ch in cand_norm if ch.isalpha())
+        token_count = len([w for w in cand_norm.split() if w])
+
+        # drop single roman numerals or too-short anchors
+        if len(letters_only) < MIN_LETTERS or token_count < MIN_TOKENS:
+            continue
+
         is_allowed = any(
             (cand_tight == at) or (cand_tight in at) or (at in cand_tight)
             for at in allowed_tight
@@ -83,12 +97,18 @@ def _match_org_to_window(org_name: str, org_windows: List[Dict[str, Any]]) -> Tu
         return 0, "org_anchored"
 
     # --- strict/substring match first ---
+    MIN_SUBSTR = 10 # same threshold used above
+
+
     a_norm = _normalize_title(org_name)
     a_tight = a_norm.replace(" ", "").lower()
     for i, w in enumerate(org_windows):
         b_norm = _normalize_title(w["name"])
         b_tight = b_norm.replace(" ", "").lower()
-        if a_tight == b_tight or a_tight in b_tight or b_tight in a_tight:
+        if a_tight == b_tight:
+            return i, "org_anchored"
+        if (len(a_tight) >= MIN_SUBSTR and a_tight in b_tight) or \
+       (len(b_tight) >= MIN_SUBSTR and b_tight in a_tight):
             return i, "org_anchored"
 
     # --- fallback: Jaccard scoring (legacy behavior) ---
