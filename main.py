@@ -17,7 +17,7 @@ from spacy_modulo import get_nlp, setup_entities, OPTIONS
 
 # from serie3_splitter import divide_body_by_org_and_docs_serieIII
 
-from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII, DBG
+from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII
 
 
 
@@ -165,7 +165,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IIISerie-002-2025-01-31.pdf",
+        default="IIISerie-006-2025-03-18.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -202,7 +202,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc, Path("ents.html"))
+    render_entities_html(doc_sumario, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")

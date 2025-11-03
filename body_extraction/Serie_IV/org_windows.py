@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple, Set
 from .utils_text import _normalize_title
 from .utils_text import _ocr_clean  # (not used here, kept symmetrical)
-from .debug import DBG
+
 
 # --- small helpers (local to this module) ---
 
@@ -17,7 +17,7 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    from .debug import DBG
+
 
     def norm(s: str) -> str:
         s = (s or "").strip()
@@ -80,8 +80,6 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     else:
         windows.append({"name": "(global)", "start": 0, "end": len(doc_body.text)})
 
-    # (optional) light debug
-    DBG._p(f"WIN simple: kept={len(kept)} windows={len(windows)}")
     return windows
 
 

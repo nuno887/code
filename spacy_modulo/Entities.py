@@ -33,7 +33,6 @@ RULER_PATTERNS = [
 
 {"label": "SERIE_III", "pattern": "Direção Regional do Trabalho"},
 {"label": "SERIE_III", "pattern": "Direcção Regional do Trabalho"},
-{"label": "JUNK_LABEL", "pattern": "SECRETARI"},
 
 {"label": "DOC_NAME_LABEL", "pattern": "Convenções Coletivas de Trabalho:"},
 {"label": "DOC_NAME_LABEL", "pattern": "Portarias de Extensão:"},
@@ -377,34 +376,7 @@ def docname_entity(doc):
         doc.ents = filter_spans(list(doc.ents) + spans)
     return doc
 
-@Language.component("junk_entity")  # NEW
-def junk_entity(doc):
-    text = doc.text
-    lines = text.splitlines(keepends=True)
 
-    spans = []
-    pos = 0
-    for ln in lines:
-        line_end = pos + len(ln)
-        content = ln[:-1] if ln.endswith("\n") else ln
-        stripped = content.strip()
-        if stripped:
-            leading = len(content) - len(content.lstrip())
-            trailing = len(content) - len(content.rstrip())
-            start_idx = pos + leading
-            end_idx = (line_end - (1 if ln.endswith("\n") else 0)) - trailing
-
-            if start_idx < end_idx and _is_junk_line(stripped):
-                # skip if overlaps an existing ent
-                if not any(e.start_char < end_idx and e.end_char > start_idx for e in doc.ents):
-                    span = doc.char_span(start_idx, end_idx, label="JUNK_LABEL", alignment_mode="contract")
-                    if span is not None:
-                        spans.append(span)
-        pos = line_end
-
-    if spans:
-        doc.ents = filter_spans(list(doc.ents) + spans)
-    return doc
 
 import re
 from spacy.language import Language
@@ -617,19 +589,23 @@ def create_concat_doc_name_label(nlp, name):
 
 
 
+
 # ===================================================================================
+
+
 
 def setup_entities(nlp, SerieIII: bool):
 
     ruler = nlp.add_pipe("entity_ruler", first = True)
     ruler.add_patterns(RULER_PATTERNS)
     nlp.add_pipe("allcaps_entity")
+
     if SerieIII:
         nlp.add_pipe("docname_entity_III")
     else:
         nlp.add_pipe("docname_entity")
         nlp.add_pipe("concat_doc_name_label")
-    # nlp.add_pipe("junk_entity")
+ 
     nlp.add_pipe("doc_text_entity")
     # nlp.add_pipe("strip_junk_ents")
     nlp.add_pipe("paragraph_entity")
