@@ -20,11 +20,11 @@ from spacy_modulo import get_nlp, setup_entities, OPTIONS
 from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII, DBG
 
 
-
+"""
 DBG.enable(True)
 DBG.use_color(False)  # optional: cleaner .txt without ANSI codes
 DBG.set_output_file("serie_iv_debug.txt", append=False)
-
+"""
 # -----------------------
 # Config knobs
 # -----------------------
@@ -220,5 +220,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-
+"""
 DBG.close()
+"""
