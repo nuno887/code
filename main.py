@@ -17,9 +17,13 @@ from spacy_modulo import get_nlp, setup_entities, OPTIONS
 
 # from serie3_splitter import divide_body_by_org_and_docs_serieIII
 
-from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII
+from body_extraction import divide_body_by_org_and_docs, divide_body_by_org_and_docs_serieIII, DBG
 
 
+
+DBG.enable(True)
+DBG.use_color(False)  # optional: cleaner .txt without ANSI codes
+DBG.set_output_file("serie_iv_debug.txt", append=False)
 
 # -----------------------
 # Config knobs
@@ -165,7 +169,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IIISerie-05-2012-03-02.pdf",
+        default="IIISerie-004-2025-02-27.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -209,5 +213,12 @@ def main():
     print("Wrote results.html")
 
 
+
+
+
+
 if __name__ == "__main__":
     main()
+
+
+DBG.close()

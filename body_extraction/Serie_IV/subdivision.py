@@ -6,14 +6,19 @@ from .utils_text import (
     _ocr_clean, _char_ngrams,
     LETTERS_MIN_RATIO, NGRAM_N, NGRAM_JACCARD_MIN, MIN_LEN_FOR_NGRAMS
 )
+from .debug import DBG  # <-- debug helper
+
 
 def _reparse_seg_text(seg_text: str) -> List[Tuple[str, str, int, int]]:
     doc = nlp(seg_text)
+    # Debug: show what SpaCy found inside the segment
+    DBG.entities_stream(doc, prefix="reparse")
     out: List[Tuple[str, str, int, int]] = []
     for e in doc.ents:
         label = getattr(e, "label_", "")
         out.append((label, e.text, e.start_char, e.end_char))
     return out
+
 
 def _allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
     titles: Set[str] = set()
@@ -59,6 +64,7 @@ def _allowed_child_titles_for_item(item: Dict[str, Any]) -> Set[str]:
         out.add(t)
 
     return out
+
 
 def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]) -> Optional[str]:
     if not allowed_titles:
@@ -155,42 +161,55 @@ def _pick_canonical_from_block(block_titles: List[str], allowed_titles: Set[str]
 
     return None
 
+
 def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[str]) -> List[SubSlice]:
     doc = nlp(seg_text)
     ents = sorted(list(doc.ents), key=lambda e: e.start_char)
 
-    print("==================================")
-    print(f"Allowed titles:", allowed_titles)
-    print("==================================")
+    # Debug: show allowed titles and the entity stream for this segment
+    DBG.allowed_titles(allowed_titles)
+    DBG.entities_stream(doc, prefix="seg")
 
     header_blocks: List[Dict[str, Any]] = []
     current_block: List[Any] = []
     for e in ents:
         if getattr(e, "label_", None) == "DOC_NAME_LABEL":
             if current_block:
+                prev_e = current_block[-1]
+                gap = e.start_char - prev_e.end_char
                 current_block.append(e)
+                # Debug: appended another DOC_NAME_LABEL into same block
+                DBG.header_block_append(prev_e, e, gap)
             else:
                 current_block = [e]
+                # Debug: first DOC_NAME_LABEL starts a new block
+                DBG.header_block_start(e)
         else:
             if current_block:
                 start = current_block[0].start_char
                 end = current_block[-1].end_char
-                header_blocks.append({
+                hb = {
                     "headers": current_block[:],
                     "start": start,
                     "end": end,
                     "titles": [_normalize_title(h.text) for h in current_block],
-                })
+                }
+                header_blocks.append(hb)
+                # Debug: closing this header block
+                DBG.header_block_close(start, end, hb["titles"])
                 current_block = []
     if current_block:
         start = current_block[0].start_char
         end = current_block[-1].end_char
-        header_blocks.append({
+        hb = {
             "headers": current_block[:],
             "start": start,
             "end": end,
             "titles": [_normalize_title(h.text) for h in current_block],
-        })
+        }
+        header_blocks.append(hb)
+        # Debug: closing the trailing header block
+        DBG.header_block_close(start, end, hb["titles"])
 
     approved: List[Dict[str, Any]] = []
     for hb in header_blocks:
@@ -210,6 +229,8 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
             body_start = 0
         body_end = len(seg_text)
         body_text = seg_text[body_start:body_end]
+        # Debug: fallback subslice info
+        DBG.subslice_fallback(body_start, body_end, seg_text, headers_texts)
         subs.append(SubSlice(
             title=headers_texts[0] if headers_texts else "",
             headers=headers_texts,
@@ -220,8 +241,15 @@ def _subdivide_seg_text_by_allowed_headers(seg_text: str, allowed_titles: Set[st
         return subs
 
     for i, hb in enumerate(approved):
+        # Debug: which block is approved and canonical picked
+        DBG.approved_block(i, hb["titles"], hb.get("canonical"))
+
         header_end = hb["end"]
         next_start = approved[i + 1]["start"] if (i + 1) < len(approved) else len(seg_text)
+
+        # Debug: planned subslice boundaries
+        DBG.subslice(i, header_end=header_end, next_start=next_start, seg_text=seg_text)
+
         body_text = seg_text[header_end:next_start]
         subs.append(SubSlice(
             title=hb["canonical"],

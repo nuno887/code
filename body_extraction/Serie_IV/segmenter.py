@@ -8,6 +8,9 @@ from .org_windows import _collect_org_windows_from_ents, _match_org_to_window
 from .doc_type_match import _doc_type_key, _match_doc_type_headers, _compute_next_bounds_per_window
 from .subdivision import _reparse_seg_text, _allowed_child_titles_for_item, _subdivide_seg_text_by_allowed_headers
 
+from .debug import DBG
+
+
 def divide_body_by_org_and_docs_serieIII(
     doc_body,
     payload: Dict[str, Any],
@@ -23,6 +26,11 @@ def divide_body_by_org_and_docs_serieIII(
       4) NEW: If an item has no doc_name, create a segment spanning its org window and
          run normal children subdivision on it.
     """
+
+    # segmenter.py (start of divide_body_by_org_and_docs_serieIII)
+    DBG.enable(True)  # turn on when debugging (off in prod)
+    DBG.payload_overview(payload)
+
     if not isinstance(payload, dict):
         return [], {"error": "invalid_payload"}
 
@@ -39,6 +47,11 @@ def divide_body_by_org_and_docs_serieIII(
     results: List[OrgResult] = []
     total_slices = 0
 
+    # segmenter.py (right after org_windows/doc_type_matches computed)
+    DBG.org_windows(org_windows, doc_body.text)
+    DBG.doc_type_matches(doc_type_matches)
+
+
     for org_id, org_name in org_map.items():
         win_idx, win_status = _match_org_to_window(org_name, org_windows)
         items = sorted(
@@ -53,6 +66,9 @@ def divide_body_by_org_and_docs_serieIII(
             title = _normalize_title(title_raw)
             key = _doc_type_key(item)
             mt = doc_type_matches.get(key)
+            # segmenter.py (inside the for item in items: loop, right after computing `mt`)
+            DBG.item_anchor(org_name, item, win_status, mt)
+
 
             # NEW: items without doc_name → segment over org window and subdivide children
             if mt is None and not title and win_idx is not None:
@@ -96,6 +112,10 @@ def divide_body_by_org_and_docs_serieIII(
             header_end = mt.get("end", start)
             content_start = header_end
             seg_text = doc_body.text[content_start:end]
+
+            # segmenter.py (when you’ve computed content_start/content_end and seg_text)
+            DBG.slice_bounds(header_end, content_start, end, seg_text)
+
 
             ds = DocSlice(
                 doc_name=title,

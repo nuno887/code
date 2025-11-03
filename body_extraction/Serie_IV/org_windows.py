@@ -1,7 +1,9 @@
 from typing import Any, Dict, List, Optional, Tuple, Set
 from .utils_text import _normalize_title
 from .utils_text import _ocr_clean  # (not used here, kept symmetrical)
-# Token utilities local to this module
+from .debug import DBG
+
+# --- small helpers (local to this module) ---
 
 def _simple_token_set(s: str) -> set:
     return set(t.lower() for t in s.split() if t.strip())
@@ -13,12 +15,10 @@ def _jaccard(a: set, b: set) -> float:
     union = len(a | b)
     return float(inter) / float(union) if union else 0.0
 
+
 def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    """
-    Build windows from header-like ents, but ONLY keep ones that really match a payload org.
-    Robust to cases where a single visual line is split across labels like ORG_LABEL and DOC_NAME_LABEL.
-    NEW: Accept a run of adjacent header-like ents (labels in ACCEPT) with small gaps as one candidate span.
-    """
+    from .debug import DBG
+
     def norm(s: str) -> str:
         s = (s or "").strip()
         s = " ".join(s.split())
@@ -36,45 +36,22 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     allowed_tight = [tight(o) for o in allowed_orgs]
     allowed_toksets = [toks(o) for o in allowed_orgs]
 
-    ACCEPT = {"ORG_LABEL", "ORG_WITH_STAR_LABEL", "DOC_NAME_LABEL"}
-    MERGE_MAX_GAP = 3  # characters
+    # ✅ Only consider actual org banners as window anchors
+    ACCEPT = {"ORG_LABEL", "ORG_WITH_STAR_LABEL"}
 
-    ents_sorted = sorted(list(doc_body.ents), key=lambda e: e.start_char)
-    merged_spans: List[Tuple[int, int, str]] = []
+    ents_sorted = [e for e in sorted(list(doc_body.ents), key=lambda e: e.start_char)
+                   if getattr(e, "label_", None) in ACCEPT]
 
-    cur_start = None
-    cur_end = None
-    for e in ents_sorted:
-        lab = getattr(e, "label_", None)
-        if lab not in ACCEPT:
-            if cur_start is not None:
-                merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
-                cur_start = cur_end = None
-            continue
-        if cur_start is None:
-            cur_start = e.start_char
-            cur_end = e.end_char
-        else:
-            gap = e.start_char - cur_end
-            if gap <= MERGE_MAX_GAP:
-                cur_end = max(cur_end, e.end_char)
-            else:
-                merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
-                cur_start = e.start_char
-                cur_end = e.end_char
-
-    if cur_start is not None:
-        merged_spans.append((cur_start, cur_end, doc_body.text[cur_start:cur_end]))
-
+    # Filter to those that actually match an allowed org (tight/overlap)
     kept: List[Tuple[int, int, str]] = []
-    for (st, en, txt) in merged_spans:
-        cand_text = txt
-        cand_tight = tight(cand_text)
-        cand_tokset = toks(cand_text)
+    for e in ents_sorted:
+        txt = e.text
+        cand_tight = tight(txt)
+        cand_tokset = toks(txt)
         tight_ok = any((a in cand_tight) or (cand_tight in a) for a in allowed_tight)
         overlap_ok = any(len(cand_tokset & a) >= 2 for a in allowed_toksets)
         if tight_ok or overlap_ok:
-            kept.append((st, en, cand_text))
+            kept.append((e.start_char, e.end_char, txt))
 
     windows: List[Dict[str, Any]] = []
     if kept:
@@ -86,7 +63,11 @@ def _collect_org_windows_from_ents(doc_body, allowed_orgs: Optional[List[str]] =
     else:
         windows.append({"name": "(global)", "start": 0, "end": len(doc_body.text)})
 
+    # (optional) light debug
+    DBG._p(f"WIN simple: kept={len(kept)} windows={len(windows)}")
     return windows
+
+
 
 def _match_org_to_window(org_name: str, org_windows: List[Dict[str, Any]]) -> Tuple[Optional[int], str]:
     if not org_windows:
@@ -101,9 +82,11 @@ def _match_org_to_window(org_name: str, org_windows: List[Dict[str, Any]]) -> Tu
     for i, w in enumerate(org_windows):
         b = _simple_token_set(w["name"])
         sc = _jaccard(a, b)
+        DBG._p(f"ORG match-cand: idx={i} score={sc:.3f} name={w['name'][:80]!r}")
         if sc > best_score:
             best_score = sc
             best_idx = i
 
     status = "org_anchored" if best_score > 0 else "org_unanchored"
+    DBG._p(f"ORG match-picked: idx={best_idx} status={status} score={best_score:.3f}")
     return best_idx, status
