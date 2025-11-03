@@ -10,8 +10,7 @@ Split rule (as specified):
 2) After that, find the first org-like entity (label in {"ORG_LABEL", "ORG_WITH_STAR_LABEL"}).
    Normalize its text to a letters-only key and store it as the boundary key.
 3) Continue scanning org-like entities in order. When an org appears whose normalized text
-   equals the stored key, or when the org's normalized text is a strict substring of the stored key
-   (the "inside" rule), that org's start marks the beginning of the body.
+   equals the stored key, that org's start marks the beginning of the body.
 4) sumario = text[sumario_end_char : boundary_org_start_char]
    body    = text[boundary_org_start_char : ]
 
@@ -99,7 +98,6 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
                 "boundary_org_raw": Optional[str],
                 "boundary_org_norm": Optional[str],
                 "boundary_org_start": Optional[int],
-                "first_org_replaced": Optional[bool],  # True if inside-rule replacement happened
             }
     """
     meta: Dict[str, Any] = {
@@ -111,14 +109,14 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
         "boundary_org_raw": None,
         "boundary_org_norm": None,
         "boundary_org_start": None,
-        "first_org_replaced": False,
     }
 
     # If no explicit text was provided, use the Doc's original text
     if text is None:
         text = doc.text
 
-    # 1) Find first Sumario entity (take the last in doc.ents order if multiple; original behavior)
+
+    # 1) Find first Sumario entity
     sumario_ent = None
     for ent in reversed(list(doc.ents)):
         if _is_sumario(ent):
@@ -151,9 +149,6 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
 
     # 3) Scan subsequent org-like entities for the first repeat of the normalized key
     boundary_ent = None
-    boundary_by_inside = False
-
-    # Exact normalized match
     for ent in orgs_after[1:]:
         cur_norm = _normalize_for_match_letters_only(ent.text)
         if debug:
@@ -161,14 +156,12 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
         if cur_norm == first_org_norm:
             boundary_ent = ent
             break
-
-    # "Inside" rule: later org is a strict substring of the first org's normalized text
+    
     if boundary_ent is None:
         for ent in orgs_after[1:]:
             cur_norm = _normalize_for_match_letters_only(ent.text)
             if (cur_norm in first_org_norm) and (len(cur_norm) < len(first_org_norm)):
                 boundary_ent = ent
-                boundary_by_inside = True
                 break
 
     if boundary_ent is None:
@@ -185,18 +178,6 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
 
     sumario_text = text[seen_sumario_end:boundary_start]
     body_text = text[boundary_start:]
-
-    # If boundary chosen via "inside", replace first_org with boundary_org in meta and sumario_text
-    if boundary_by_inside:
-        # mark replacement and update "first_org_*" to the boundary entity
-        meta["first_org_replaced"] = True
-        meta["first_org_raw"] = boundary_ent.text
-        meta["first_org_norm"] = _normalize_for_match_letters_only(boundary_ent.text)
-
-        # Single replacement of the original first org raw text within the sumario segment
-        # (safe no-op if the raw text isn't present)
-        if first_org_raw:
-            sumario_text = sumario_text.replace(first_org_raw, boundary_ent.text, 1)
 
     return sumario_text, body_text, meta
 

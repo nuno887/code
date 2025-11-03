@@ -592,7 +592,30 @@ def create_concat_doc_name_label(nlp, name):
 
 # ===================================================================================
 
+@Language.factory("single_word_orgs_to_junk")
+def create_single_word_orgs_to_junk(nlp, name):
+    # Make sure labels exist in the StringStore
+    JUNK = nlp.vocab.strings.add("JUNK_LABEL")
+    ORG = nlp.vocab.strings.add("ORG_LABEL")
+    ORG_STAR = nlp.vocab.strings.add("ORG_WITH_STAR_LABEL")
 
+    def component(doc):
+        new_ents = []
+        for ent in doc.ents:
+            if ent.label in (ORG, ORG_STAR):
+                # Count only alphabetic tokens (unicode-aware). This ignores **, punctuation, etc.
+                alpha_word_count = sum(1 for t in ent if t.is_alpha)
+                # Treat single-word (or degenerate 0-alpha) as junk
+                if alpha_word_count <= 1:
+                    new_ents.append(Span(doc, ent.start, ent.end, label=JUNK))
+                else:
+                    new_ents.append(ent)
+            else:
+                new_ents.append(ent)
+        doc.ents = tuple(new_ents)
+        return doc
+
+    return component
 
 def setup_entities(nlp, SerieIII: bool):
 
@@ -607,10 +630,12 @@ def setup_entities(nlp, SerieIII: bool):
         nlp.add_pipe("concat_doc_name_label")
  
     nlp.add_pipe("doc_text_entity")
-    # nlp.add_pipe("strip_junk_ents")
+
     nlp.add_pipe("paragraph_entity")
     nlp.add_pipe("paragraph_to_org_star")
     nlp.add_pipe("split_org_with_star")
     nlp.add_pipe("orglabel_to_paragraph_sanitizer")
+
+    nlp.add_pipe("single_word_orgs_to_junk")
 
         

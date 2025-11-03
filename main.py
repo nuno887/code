@@ -160,6 +160,11 @@ def render_results_html(results, summary, out_path: Path):
     out_path.write_text("\n".join(lines), encoding="utf-8")
 
 
+
+
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Process a Serie I/II/III/IV PDF.")
     parser.add_argument(
@@ -209,6 +214,8 @@ def main():
     print("Wrote results.html")
 
 
+    # print(f"sumario_text",sumario_text)
+    # print(f"_meta", _meta)
 
 
 
