@@ -165,7 +165,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IIISerie-006-2025-03-18.pdf",
+        default="IIISerie-19-2014-10-02.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
