@@ -98,7 +98,77 @@ def _first_leader_page_break_index(s: str):
         return end_num
     return None
 
+# --- Robust separator (horizontal-rule style) --------------------------------
+# Accept ≥3 dash-like/underscore tokens, allowing spaces between them
+# \u2010-\u2015 = ‐ ‒ – — ―, \u2212 = minus sign
+_sep_token = r"[-_\u2010-\u2015\u2212]"
+_separator_run_rx = re.compile(rf"(?:\s*{_sep_token}\s*){{3,}}")
+
+def _first_separator_break_index(s: str):
+    """
+    If there's a run of ≥3 dash-like/underscore tokens (with optional spaces between)
+    and there's more text after it, return index right AFTER the run; else None.
+    """
+    m = _separator_run_rx.search(s)
+    if not m:
+        return None
+    cut = m.end()
+    if s[cut:].strip():
+        return cut
+    return None
+
+def _split_by_intra_entities(text: str, s_abs: int, e_abs: int, clip_fn):
+    """
+    Post-pass splitter for one PARAGRAPH span [s_abs, e_abs):
+    Repeatedly split on the earliest of:
+      - leader+page (…… 12A) via _first_leader_page_break_index
+      - separator runs (---, — — —, ___, etc.) via _first_separator_break_index
+    Returns list of (start, end) absolute char ranges clipped away from protected spans.
+    """
+    seg = text[s_abs:e_abs]
+    local_start = 0
+    out = []
+
+    while True:
+        slice_ = seg[local_start:]
+        cuts = []
+        c1 = _first_leader_page_break_index(slice_)
+        if c1 is not None:
+            cuts.append(local_start + c1)
+        c2 = _first_separator_break_index(slice_)
+        if c2 is not None:
+            cuts.append(local_start + c2)
+
+        if not cuts:
+            break
+
+        cut_rel = min(cuts)
+        a_abs = s_abs + local_start
+        b_abs = s_abs + cut_rel
+
+        s_emit, e_emit, clipped = clip_fn(a_abs, b_abs)
+        if e_emit > s_emit:
+            out.append((s_emit, e_emit))
+
+        # advance past the cut, skipping whitespace
+        local_start = cut_rel
+        while s_abs + local_start < e_abs and text[s_abs + local_start].isspace():
+            local_start += 1
+
+        if clipped and (s_abs + local_start) >= e_abs:
+            break
+
+    # tail
+    tail_s = s_abs + local_start
+    if tail_s < e_abs:
+        s_emit, e_emit, _ = clip_fn(tail_s, e_abs)
+        if e_emit > s_emit:
+            out.append((s_emit, e_emit))
+
+    return out or [(s_abs, e_abs)]
+
 # -----------------------------------------------------------------------------
+
 
 @Language.component("paragraph_entity")
 def paragraph_entity(doc):
@@ -151,7 +221,7 @@ def paragraph_entity(doc):
             end = ent.end_char
             last_piece = text[start:end]
 
-            # --- Intra-entity TOC "leader + page" splits ----------------------
+            # --- Intra-entity TOC "leader + page" splits (keep existing behavior) ----
             local_start = start
             local_slice = text[local_start:end]
 
@@ -204,7 +274,13 @@ def paragraph_entity(doc):
                 if _looks_like_list_start(nxt_slice):
                     break
 
-                # --- NEW heuristics -------------------------------------------
+                # EXTRA guard: don't merge across a separator that ended previous line or starts the next
+                if _first_separator_break_index(last_piece) is not None:
+                    break
+                if _separator_run_rx.match(nxt_slice):  # separator starts the next line
+                    break
+
+                # --- heuristics -----------------------------------------------
                 nxt_ends_with_leader = _ends_with_ellipsis(nxt_slice)
                 ends_like_sentence = _ends_with_terminator(last_piece)
                 nxt_lead = _leading_alpha_case_or_none(nxt_slice)
@@ -213,17 +289,13 @@ def paragraph_entity(doc):
                 if ends_like_sentence and nxt_lead == 'lower' and not _ends_with_ellipsis(last_piece):
                     ends_like_sentence = False
 
-                # NEW RULE 1: If the next line ends with leader dots, allow merge even if next starts Uppercase.
+                # Allow merge even if next starts Uppercase when next ends with leader dots.
                 if ends_like_sentence and nxt_ends_with_leader:
                     ends_like_sentence = False
 
-                # NEW RULE 2 (optional): If last piece ends with a short abbreviation like "Assoc."/"Sind.", allow continuation.
-                try:
-                    if ends_like_sentence and _ends_with_abbrev(last_piece):
-                        ends_like_sentence = False
-                except NameError:
-                    # _ends_with_abbrev not defined; ignore this heuristic.
-                    pass
+                # Allow continuation if last piece ends with short abbreviation like "Assoc."/"Sind."
+                if ends_like_sentence and _ends_with_abbrev(last_piece):
+                    ends_like_sentence = False
                 # ---------------------------------------------------------------
 
                 if ends_like_sentence:
@@ -251,6 +323,20 @@ def paragraph_entity(doc):
         else:
             i += 1
 
+    # --- POST-PASS: split merged PARAGRAPHs by (leader+page) OR robust separators ---
     if spans:
-        doc.ents = filter_spans(list(doc.ents) + spans)
+        expanded = []
+        for sp in spans:
+            if sp.label_ == PARAGRAPH_LABEL:
+                parts = _split_by_intra_entities(
+                    text, sp.start_char, sp.end_char, clip_fn=clip_to_before_protected
+                )
+                for s_abs, e_abs in parts:
+                    ps = doc.char_span(s_abs, e_abs, label=PARAGRAPH_LABEL, alignment_mode="contract")
+                    if ps is not None:
+                        expanded.append(ps)
+            else:
+                expanded.append(sp)
+
+        doc.ents = filter_spans(list(doc.ents) + expanded)
     return doc
