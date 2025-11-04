@@ -240,7 +240,7 @@ def divide_body_by_org_and_docs(
             else:
                 unmatched_docs.append(jdoc_raw)
 
-        # Fallback: prefer only headers that appear in JSON
+        # Fallbacks
         if not matched_slices and docname_spans_sorted:
             matching_headers = [h for h in docname_spans_sorted if normalize_doc_title(h.text) in json_name_set]
             if matching_headers:
@@ -287,7 +287,9 @@ def divide_body_by_org_and_docs(
         return matched_slices, unmatched_docs, status, len(matched_slices)
 
     if not hierarchical:
-        # FLAT MODE
+        # -----------------------
+        # FLAT MODE (unchanged)
+        # -----------------------
         json_org_keys = {_org_key(item.get("org", {}).get("text", "")) for item in items}
         org_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, json_org_keys)
 
@@ -330,20 +332,20 @@ def divide_body_by_org_and_docs(
                     org_slug = re.sub(r"[^\w.-]+", "_", normalize_text(json_org_text_raw))[:120]
                     path = out_path / f"{file_prefix}_ORG_{idx:03d}_{org_slug}.txt"
                     with open(path, "w", encoding="utf-8") as f:
-                        f.write("DOC_BEGIN\\n")
-                        f.write(f"ORG: {_strip_markdown_bold(json_org_text_raw).strip()}\\n")
+                        f.write("DOC_BEGIN\n")
+                        f.write(f"ORG: {_strip_markdown_bold(json_org_text_raw).strip()}\n")
                         f.write(block_text)
-                        f.write("\\nDOC_END\\n")
+                        f.write("\nDOC_END\n")
                 if write_doc_files and matched_slices:
                     for k, ds in enumerate(matched_slices, start=1):
                         doc_slug = re.sub(r"[^\w.-]+", "_", normalize_text(ds.doc_name))[:120]
                         path = out_path / f"{file_prefix}_ORG_{idx:03d}_DOC_{k:03d}_{doc_slug}.txt"
                         with open(path, "w", encoding="utf-8") as f:
-                            f.write("DOC_BEGIN\\n")
-                            f.write(f"ORG: {_strip_markdown_bold(json_org_text_raw).strip()}\\n")
-                            f.write(f"DOC: {ds.doc_name}\\n")
+                            f.write("DOC_BEGIN\n")
+                            f.write(f"ORG: {_strip_markdown_bold(json_org_text_raw).strip()}\n")
+                            f.write(f"DOC: {ds.doc_name}\n")
                             f.write(ds.text)
-                            f.write("\\nDOC_END\\n")
+                            f.write("\nDOC_END\n")
             else:
                 org_missing += 1
                 if verbose:
@@ -356,7 +358,9 @@ def divide_body_by_org_and_docs(
                 ))
 
     else:
-        # HIERARCHICAL MODE
+        # -----------------------
+        # HIERARCHICAL MODE (MODIFIED TO PRESERVE top_org AND ADD sub_org IN extras)
+        # -----------------------
         top_org_keys = {_org_key(item.get("top_org", {}).get("text", "")) for item in items}
         top_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, top_org_keys)
 
@@ -370,19 +374,29 @@ def divide_body_by_org_and_docs(
             top_org_raw = item.get("top_org", {}).get("text", "")
             top_key = _org_key(top_org_raw)
             sub_orgs = item.get("sub_orgs", [])
+            top_org_clean = _strip_markdown_bold(top_org_raw).strip()   # <— for consistent use
 
             if top_key not in top_lookup:
+                # If the top org block isn't in the body, mark each sub_org as missing
                 for sub in sub_orgs:
                     sub_raw = sub.get("org", {}).get("text", "")
+                    sub_org_clean = _strip_markdown_bold(sub_raw).strip()
                     org_missing += 1
                     if verbose:
                         print(f"[WARN] top_org missing; marking sub_org missing: {sub_raw!r}")
-                    results.append(OrgBlockResult(
-                        org=_strip_markdown_bold(sub_raw).strip(),
+
+                    # MOD: keep org as top_org, attach sub_org in extras
+                    obr = OrgBlockResult(
+                        org=top_org_clean,
                         org_block_text="",
                         docs=[],
                         status="org_missing",
-                    ))
+                    )
+                    try:
+                        setattr(obr, "extras", {"sub_org": sub_org_clean})
+                    except Exception:
+                        pass
+                    results.append(obr)
                 continue
 
             _, tstart, tend = top_lookup[top_key]
@@ -402,6 +416,7 @@ def divide_body_by_org_and_docs(
             for sub in sub_orgs:
                 sub_raw = sub.get("org", {}).get("text", "")
                 sub_key = _org_key(sub_raw)
+                sub_org_clean = _strip_markdown_bold(sub_raw).strip()
                 json_docs = sub.get("docs", [])
                 total_docs_expected += len(json_docs)
 
@@ -410,14 +425,22 @@ def divide_body_by_org_and_docs(
                     org_missing += 1
                     if verbose:
                         print(f"[WARN] sub_org not found in body: {sub_raw!r}")
-                    results.append(OrgBlockResult(
-                        org=_strip_markdown_bold(sub_raw).strip(),
+
+                    # MOD: keep org as top_org, attach sub_org in extras
+                    obr = OrgBlockResult(
+                        org=top_org_clean,
                         org_block_text="",
                         docs=[],
                         status="org_missing",
-                    ))
+                    )
+                    try:
+                        setattr(obr, "extras", {"sub_org": sub_org_clean})
+                    except Exception:
+                        pass
+                    results.append(obr)
                     continue
 
+                # Build slices for each occurrence of the sub_org header
                 slices: List[DocSlice] = []
                 for occ in occurs:
                     s = occ.start_char
@@ -441,23 +464,30 @@ def divide_body_by_org_and_docs(
                 status = "ok" if len(slices) == len(json_docs) == matched_count else "partial"
                 total_docs_matched += len(matched_slices)
 
-                results.append(OrgBlockResult(
-                    org=_strip_markdown_bold(sub_raw).strip(),
+                # MOD: keep org as top_org, attach sub_org in extras
+                obr = OrgBlockResult(
+                    org=top_org_clean,
                     org_block_text=doc_text[occurs[0].start_char : end_by_anchor_id[id(occurs[-1])]],
                     docs=matched_slices,
                     status=status,
-                ))
+                )
+                try:
+                    setattr(obr, "extras", {"sub_org": sub_org_clean})
+                except Exception:
+                    pass
+                results.append(obr)
 
                 if write_doc_files and matched_slices:
                     for k, ds in enumerate(matched_slices, start=1):
                         doc_slug = re.sub(r"[^\w.-]+", "_", normalize_text(ds.doc_name))[:120]
                         path = out_path / f"{file_prefix}_SUBORG_DOC_{k:03d}_{doc_slug}.txt"
                         with open(path, "w", encoding="utf-8") as f:
-                            f.write("DOC_BEGIN\\n")
-                            f.write(f"ORG: {_strip_markdown_bold(sub_raw).strip()}\\n")
-                            f.write(f"DOC: {ds.doc_name}\\n")
+                            f.write("DOC_BEGIN\n")
+                            f.write(f"ORG: {top_org_clean}\n")
+                            f.write(f"SUB_ORG: {sub_org_clean}\n")
+                            f.write(f"DOC: {ds.doc_name}\n")
                             f.write(ds.text)
-                            f.write("\\nDOC_END\\n")
+                            f.write("\nDOC_END\n")
 
     summary = {
         "orgs_total": total_orgs,
@@ -469,6 +499,7 @@ def divide_body_by_org_and_docs(
         "docs_matched": total_docs_matched,
     }
     return results, summary
+
 
 def print_summary(summary: Dict[str, Any]) -> None:
     print(

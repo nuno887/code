@@ -250,6 +250,7 @@ def render_slim_html(slim: dict, out_path: Path) -> None:
                 section_title = e.get("section_title", "") or ""
                 headers = e.get("headers") or []
                 text = e.get("text", "") or ""
+                sub_org = e.get("sub_org") or ""
 
                 # Build a searchable string for the filter
                 haystack = " ".join([
@@ -266,6 +267,8 @@ def render_slim_html(slim: dict, out_path: Path) -> None:
                 summary_title = section_esc if section_title else "(sem título de secção)"
                 lines.append(f"<details>")
                 lines.append(f"<summary>{org_idx:02d}.{doc_idx:02d}.{k:02d} — {summary_title}</summary>")
+                if sub_org:
+                    lines.append(f"<div class='meta'><strong>Sub-org:</strong> {html_lib.escape(sub_org)}</div>")
                 if headers:
                     lines.append("<div class='headers'><strong>Headers:</strong><ul>")
                     for h in headers:
@@ -288,7 +291,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-249-2005-12-30Supl051.pdf",
+        default="ISerie-055-2003-05-23.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -350,10 +353,6 @@ def main():
 )
     render_slim_html(slim, Path("slim.html"))
     print("Wrote slim.html")
-
-
-
-
 
 
 

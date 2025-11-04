@@ -1,4 +1,3 @@
-
 """
 result_normalizer.py
 
@@ -51,6 +50,7 @@ API_VERSION = "1.0"
 
 # --- Public API -------------------------------------------------------------
 
+
 def normalize_results(
     mode: str,
     raw_results: List[Any],
@@ -87,32 +87,34 @@ def normalize_results(
         "results": results,
     }
 
+
 # --- Serie III mapping ------------------------------------------------------
+
 
 def _map_org_serie_iii(orgres: Any) -> Dict[str, Any]:
     """Map an OrgResult (Serie III) into the unified OrgResult dict."""
-    org = getattr(orgres, "org", None) or orgres.get("org")
-    status = getattr(orgres, "status", None) or orgres.get("status")
-    docs = getattr(orgres, "docs", None) or orgres.get("docs", [])
+    org = _safe_get(orgres, "org", "") or ""
+    status = _safe_get(orgres, "status", "no_window") or "no_window"
+    docs = _safe_get(orgres, "docs", []) or []
 
     return {
-        "org": org or "",
-        "status": status or "no_window",
+        "org": org,
+        "status": status,
         # Serie III does not expose a whole-block org text; leave empty string for uniformity
         "org_block_text": "",
-        "docs": [_map_doc_serie_iii(d) for d in (docs or [])],
+        "docs": [_map_doc_serie_iii(d) for d in docs],
         # Room for future window info, if present in your OrgResult type
         # "extras": {"window_index": ..., "window_bounds": {"start":..., "end":...}}
     }
 
 
 def _map_doc_serie_iii(ds: Any) -> Dict[str, Any]:
-    name = getattr(ds, "doc_name", None) or ds.get("doc_name", "")
-    text = getattr(ds, "text", None) or ds.get("text", "")
-    status_raw = getattr(ds, "status", None) or ds.get("status") or "doc_type_segment"
-    confidence = getattr(ds, "confidence", None) or ds.get("confidence")
-    ents = getattr(ds, "ents", None) or ds.get("ents")
-    subs = getattr(ds, "subs", None) or ds.get("subs")
+    name = _safe_get(ds, "doc_name", "") or ""
+    text = _safe_get(ds, "text", "") or ""
+    status_raw = _safe_get(ds, "status", "doc_type_segment") or "doc_type_segment"
+    confidence = _safe_get(ds, "confidence", None)
+    ents = _safe_get(ds, "ents", None)
+    subs = _safe_get(ds, "subs", None)
 
     status = _map_doc_status_serie_iii(status_raw)
 
@@ -181,11 +183,15 @@ def _map_subslice(s: Any) -> Dict[str, Any]:
         if s.get("headers"):
             out["headers"] = list(s["headers"])
         if "start" in s:
-            try: out["start"] = int(s["start"])
-            except Exception: pass
+            try:
+                out["start"] = int(s["start"])
+            except Exception:
+                pass
         if "end" in s:
-            try: out["end"] = int(s["end"])
-            except Exception: pass
+            try:
+                out["end"] = int(s["end"])
+            except Exception:
+                pass
         return out
 
     # Case 2: string repr like "SubSlice(title='...', headers=[...], body='...', start=0, end=7)"
@@ -204,11 +210,15 @@ def _map_subslice(s: Any) -> Dict[str, Any]:
         if headers_raw:
             out["headers"] = [m.group(2) for m in re.finditer(r"([\"'])(.*?)\1", headers_raw)]
         if start is not None:
-            try: out["start"] = int(start)
-            except Exception: pass
+            try:
+                out["start"] = int(start)
+            except Exception:
+                pass
         if end is not None:
-            try: out["end"] = int(end)
-            except Exception: pass
+            try:
+                out["end"] = int(end)
+            except Exception:
+                pass
         return out
 
     # Case 3: tuple-like fallback (title, headers?, body?, start?, end?)
@@ -218,15 +228,14 @@ def _map_subslice(s: Any) -> Dict[str, Any]:
         out = {"title": str(title), "body": str(body)}
         if len(s) > 1 and s[1]:
             out["headers"] = list(s[1])
-        if len(s) > 3 and isinstance(s[3], int): out["start"] = s[3]
-        if len(s) > 4 and isinstance(s[4], int): out["end"] = s[4]
+        if len(s) > 3 and isinstance(s[3], int):
+            out["start"] = s[3]
+        if len(s) > 4 and isinstance(s[4], int):
+            out["end"] = s[4]
         return out
     except Exception:
         # Final safety: keep something useful instead of a noisy repr
         return {"title": "", "body": str(s)}
-
-
-
 
 
 def _summary_serie_iii(s: Dict[str, Any]) -> Dict[str, Any]:
@@ -249,25 +258,31 @@ def _summary_serie_iii(s: Dict[str, Any]) -> Dict[str, Any]:
         },
     }
 
+
 # --- Serie I/II/IV (std) mapping -------------------------------------------
 
-def _map_org_serie_std(orgres: Any) -> Dict[str, Any]:
-    org = getattr(orgres, "org", None) or orgres.get("org")
-    status = getattr(orgres, "status", None) or orgres.get("status")
-    docs = getattr(orgres, "docs", None) or orgres.get("docs", [])
-    org_block_text = getattr(orgres, "org_block_text", None) or orgres.get("org_block_text", "")
 
-    return {
-        "org": org or "",
-        "status": status or "org_missing",
-        "org_block_text": org_block_text or "",
-        "docs": [_map_doc_serie_std(d) for d in (docs or [])],
+def _map_org_serie_std(orgres: Any) -> Dict[str, Any]:
+    org = _safe_get(orgres, "org", "") or ""
+    status = _safe_get(orgres, "status", "org_missing") or "org_missing"
+    docs = _safe_get(orgres, "docs", []) or []
+    org_block_text = _safe_get(orgres, "org_block_text", "") or ""
+    extras = _safe_get(orgres, "extras", None)
+
+    out = {
+        "org": org,
+        "status": status,
+        "org_block_text": org_block_text,
+        "docs": [_map_doc_serie_std(d) for d in docs],
     }
+    if extras:
+        out["extras"] = extras
+    return out
 
 
 def _map_doc_serie_std(ds: Any) -> Dict[str, Any]:
-    name = getattr(ds, "doc_name", None) or ds.get("doc_name", "")
-    text = getattr(ds, "text", None) or ds.get("text", "")
+    name = _safe_get(ds, "doc_name", "") or ""
+    text = _safe_get(ds, "text", "") or ""
     return {
         "doc_name": name,
         "text": text,
@@ -294,7 +309,6 @@ def _infer_std_mode(s: Dict[str, Any]) -> str:
     return "flat"
 
 
-
 def _maybe_prepend_doc_name(
     text: str,
     doc_name: str,
@@ -318,6 +332,7 @@ def _maybe_prepend_doc_name(
 
 
 # --- Slim payload builder ---------------------------------------------------
+
 
 def build_slim_payload(
     filename: str,
@@ -344,38 +359,86 @@ def build_slim_payload(
       In that case the top-level doc text is **not** included, to avoid duplicates.
     - If a doc slice has no subdivisions or `split_by_subs` is False, a single entry
       is emitted per doc slice (with its full text when `include_text` is True).
-    - If `include_headers` is True, subdivision headers (if any) are included.
+    - If `include_headers` is True, subdivision headers (if any) are included and
+      also prefixed into the text header block.
     """
+
+    def _make_prefix(entry: Dict[str, Any], include_headers_flag: bool) -> str:
+        lines: List[str] = []
+        for key in ("org", "sub_org", "doc_name", "section_title"):
+            val = entry.get(key)
+            if val:
+                lines.append(f"{key}: {val}")
+        if include_headers_flag and entry.get("headers"):
+            hdrs = entry["headers"]
+            if isinstance(hdrs, list):
+                lines.append("headers: " + " | ".join(map(str, hdrs)))
+            else:
+                lines.append(f"headers: {hdrs}")
+        return "\n".join(lines)
+
     docs_out: List[Dict[str, Any]] = []
     for orgres in unified.get("results", []):
-        org_name = orgres.get("org", "")
-        for ds in orgres.get("docs", []):
-            subs = ds.get("subs") or []
+        org_name = _safe_get(orgres, "org", "")
+        extras = _safe_get(orgres, "extras", {}) or {}
+        sub_org = extras.get("sub_org")
+
+        for ds in _safe_get(orgres, "docs", []) or []:
+            subs = _safe_get(ds, "subs", []) or []
+
             if split_by_subs and subs:
                 for sub in subs:
-                    entry = {
+                    # Normalize sub dict (already normalized upstream, but be safe)
+                    sub_title = _safe_get(sub, "title", "") or ""
+                    sub_headers = _safe_get(sub, "headers", None)
+                    sub_body = _safe_get(sub, "body", "") or ""
+
+                    entry: Dict[str, Any] = {
                         "org": org_name,
-                        "doc_name": ds.get("doc_name", ""),
-                        "section_title": sub.get("title", ""),
+                        "doc_name": _safe_get(ds, "doc_name", "") or "",
+                        "section_title": sub_title,
                     }
+                    if sub_org:
+                        entry["sub_org"] = sub_org
+                    if include_headers and sub_headers:
+                        entry["headers"] = sub_headers
+
                     if include_text:
-                        entry["text"] = sub.get("body", "")
-                    if include_headers and sub.get("headers"):
-                        entry["headers"] = sub.get("headers")
+                        prefix = _make_prefix(entry, include_headers)
+                        entry["text"] = f"{prefix}\n\n{sub_body}" if prefix else sub_body
+
                     docs_out.append(entry)
+
             else:
-                entry = {
+                entry: Dict[str, Any] = {
                     "org": org_name,
-                    "doc_name": ds.get("doc_name", ""),
+                    "doc_name": _safe_get(ds, "doc_name", "") or "",
                 }
+                if sub_org:
+                    entry["sub_org"] = sub_org
+
                 if include_text:
-                    entry["text"] = ds.get("text", "")
+                    body = _safe_get(ds, "text", "") or ""
+                    # Whole-doc prefix (no section_title / headers)
+                    prefix = _make_prefix(entry, include_headers_flag=False)
+                    entry["text"] = f"{prefix}\n\n{body}" if prefix else body
+
                 docs_out.append(entry)
 
     return {"file": filename, "docs": docs_out}
 
 
+# --- Safe access helper -----------------------------------------------------
+
+
+def _safe_get(obj, key, default=None):
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
 # --- File output helpers ----------------------------------------------------
+
 
 def build_output_paths(filename: str, out_dir: str | Path = "output_json") -> Dict[str, Path]:
     """Return default paths for unified and slim JSON files for a given PDF filename."""
