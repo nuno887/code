@@ -1,4 +1,3 @@
-# DocText.py
 from spacy.language import Language
 from spacy.util import filter_spans
 

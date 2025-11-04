@@ -1,7 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple, Set
 from .utils_text import _normalize_title
-from .utils_text import _ocr_clean  # (not used here, kept symmetrical)
-
+from .utils_text import _ocr_clean  
 
 # --- small helpers (local to this module) ---
 

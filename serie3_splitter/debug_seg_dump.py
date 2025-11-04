@@ -1,4 +1,3 @@
-# debug_seg_dump.py
 from __future__ import annotations
 import os
 import datetime
