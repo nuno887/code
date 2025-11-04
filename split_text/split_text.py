@@ -33,9 +33,9 @@ import unicodedata
 # Type aliases
 SplitResult = Tuple[Optional[str], str, Dict[str, Any]]
 
-
 ORG_LIKE_LABELS = {"ORG_LABEL", "ORG_WITH_STAR_LABEL"}
 SUMARIO_LABEL = "Sumario"
+JUNK_LABEL = "JUNK_LABEL"
 
 
 def _normalize_for_match_letters_only(s: str) -> str:
@@ -63,6 +63,15 @@ def _is_org_like(ent) -> bool:
     """Return True if the entity label denotes an organization-like unit for our rule."""
     label = getattr(ent, "label_", None)
     return label in ORG_LIKE_LABELS
+
+
+def _is_junk(ent) -> bool:
+    """Return True if the entity is a junk label candidate for fallback matching."""
+    try:
+        label = ent.label_ if hasattr(ent, "label_") else getattr(ent, "label", None)
+    except Exception:
+        label = None
+    return label == JUNK_LABEL
 
 
 def _is_sumario(ent) -> bool:
@@ -115,7 +124,6 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
     if text is None:
         text = doc.text
 
-
     # 1) Find first Sumario entity
     sumario_ent = None
     for ent in reversed(list(doc.ents)):
@@ -133,7 +141,11 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
 
     # 2) From after Sumario, collect org-like entities in order
     seen_sumario_end = sumario_ent.end_char
-    orgs_after = [ent for ent in doc.ents if getattr(ent, 'start_char', 0) >= seen_sumario_end and _is_org_like(ent)]
+    orgs_after = [
+        ent
+        for ent in doc.ents
+        if getattr(ent, "start_char", 0) >= seen_sumario_end and _is_org_like(ent)
+    ]
 
     if not orgs_after:
         # Sumario but no org-like after it
@@ -156,13 +168,37 @@ def split_sumario_and_body(doc, text: Optional[str] = None, debug: bool = False)
         if cur_norm == first_org_norm:
             boundary_ent = ent
             break
-    
+
+    # Heuristic: allow contained-shorter match (e.g., "ministerioeducacao" vs "educacao")
     if boundary_ent is None:
         for ent in orgs_after[1:]:
             cur_norm = _normalize_for_match_letters_only(ent.text)
             if (cur_norm in first_org_norm) and (len(cur_norm) < len(first_org_norm)):
                 boundary_ent = ent
                 break
+
+    # --- Fallback: search among JUNK_LABEL entities if no org-like repeat was found ---
+    if boundary_ent is None:
+        junk_after = [
+            ent
+            for ent in doc.ents
+            if getattr(ent, "start_char", 0) >= seen_sumario_end and _is_junk(ent)
+        ]
+        # First try exact normalized match
+        for ent in junk_after:
+            cur_norm = _normalize_for_match_letters_only(ent.text)
+            if debug:
+                print(f"[JUNK SCAN] first={first_org_norm!r} vs cur={cur_norm!r} | raw={ent.text!r}")
+            if cur_norm == first_org_norm:
+                boundary_ent = ent
+                break
+        # Then try contained-shorter heuristic
+        if boundary_ent is None:
+            for ent in junk_after:
+                cur_norm = _normalize_for_match_letters_only(ent.text)
+                if (cur_norm in first_org_norm) and (len(cur_norm) < len(first_org_norm)):
+                    boundary_ent = ent
+                    break
 
     if boundary_ent is None:
         # No repeat encountered → by strict rule, there's no body yet.

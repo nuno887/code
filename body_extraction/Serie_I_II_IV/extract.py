@@ -21,6 +21,7 @@ IGNORE_LABELS = {"JUNK_LABEL"}
 # --------------------------------------------------------------------------------------
 
 def _collect_spans(doc) -> List[SpanInfo]:
+    """Collect spans from doc.ents, skipping IGNORE_LABELS (used for primary pass)."""
     spans: List[SpanInfo] = []
     for ent in getattr(doc, "ents", []):
         label = getattr(ent, "label_", str(getattr(ent, "label", "")))
@@ -37,6 +38,127 @@ def _spans_within(spans: List[SpanInfo], start: int, end: int, labels: Optional[
             if labels is None or s.label in labels:
                 out.append(s)
     return out
+
+# --------------------------------------------------------------------------------------
+# Generic coalescing helpers (new) for label-parametric fallback
+# --------------------------------------------------------------------------------------
+
+def _build_blocks_coalesced_from_doc(
+    doc,
+    doc_text: str,
+    labels: set[str],
+    valid_org_keys: set[str],
+    *,
+    max_merge: int = 3,
+) -> List[Tuple[SpanInfo, int, int]]:
+    """
+    Build coalesced blocks using any label set directly from doc.ents.
+    Mirrors _build_org_blocks_coalesced_to_json but does not depend on _collect_spans().
+    """
+    ents = [
+        SpanInfo(
+            label=getattr(ent, "label_", str(getattr(ent, "label", ""))),
+            text=str(ent.text),
+            start_char=int(ent.start_char),
+            end_char=int(ent.end_char),
+        )
+        for ent in getattr(doc, "ents", [])
+        if getattr(ent, "label_", str(getattr(ent, "label", ""))) in labels
+    ]
+    ents.sort(key=lambda s: s.start_char)
+
+    anchors: List[SpanInfo] = []
+    i = 0
+    while i < len(ents):
+        best_j = None
+        end_char = ents[i].end_char
+        concatenated_raw = ents[i].text
+
+        for j in range(i, min(i + max_merge, len(ents))):
+            if j > i:
+                gap = doc_text[end_char:ents[j].start_char]
+                if not re.match(r"^[\s•\-–,.;:]*$", gap):
+                    break
+                concatenated_raw = concatenated_raw + " " + ents[j].text
+            if _org_key(concatenated_raw) in valid_org_keys:
+                best_j = j
+            end_char = ents[j].end_char
+
+        if best_j is not None:
+            start_char = ents[i].start_char
+            end_char = ents[best_j].end_char
+            text_slice = doc_text[start_char:end_char]
+            anchors.append(SpanInfo(label=ents[i].label, text=text_slice, start_char=start_char, end_char=end_char))
+            i = best_j + 1
+        else:
+            if _org_key(ents[i].text) in valid_org_keys:
+                anchors.append(ents[i])
+            i += 1
+
+    blocks: List[Tuple[SpanInfo, int, int]] = []
+    for k, a in enumerate(anchors):
+        start = a.start_char
+        end = anchors[k + 1].start_char if k + 1 < len(anchors) else len(doc_text)
+        blocks.append((a, start, end))
+    return blocks
+
+def _collect_anchors_coalesced_in_range(
+    doc,
+    doc_text: str,
+    bstart: int,
+    bend: int,
+    valid_keys: set[str],
+    labels: set[str],
+    *,
+    max_merge: int = 3,
+) -> List[SpanInfo]:
+    """
+    Collect coalesced anchors within [bstart, bend) for given labels and expected keys.
+    Used for hierarchical sub_org fallback.
+    """
+    ents = [
+        SpanInfo(
+            label=getattr(ent, "label_", str(getattr(ent, "label", ""))),
+            text=str(ent.text),
+            start_char=int(ent.start_char),
+            end_char=int(ent.end_char),
+        )
+        for ent in getattr(doc, "ents", [])
+        if getattr(ent, "label_", str(getattr(ent, "label", ""))) in labels
+        and bstart <= int(ent.start_char) < bend
+    ]
+    ents.sort(key=lambda s: s.start_char)
+
+    anchors: List[SpanInfo] = []
+    i = 0
+    while i < len(ents):
+        best_j = None
+        end_char = ents[i].end_char
+        concatenated_raw = ents[i].text
+
+        for j in range(i, min(i + max_merge, len(ents))):
+            if j > i:
+                gap = doc_text[end_char:ents[j].start_char]
+                if not re.match(r"^[\s•\-–,.;:]*$", gap):
+                    break
+                concatenated_raw = concatenated_raw + " " + ents[j].text
+            if _org_key(concatenated_raw) in valid_keys:
+                best_j = j
+            end_char = ents[j].end_char
+
+        if best_j is not None:
+            start_char = ents[i].start_char
+            end_char = ents[best_j].end_char
+            text_slice = doc_text[start_char:end_char]
+            anchors.append(SpanInfo(label=ents[i].label, text=text_slice, start_char=start_char, end_char=end_char))
+            i = best_j + 1
+        else:
+            if _org_key(ents[i].text) in valid_keys:
+                anchors.append(ents[i])
+            i += 1
+
+    anchors.sort(key=lambda s: s.start_char)
+    return anchors
 
 # --------------------------------------------------------------------------------------
 # ORG block building
@@ -175,7 +297,7 @@ def divide_body_by_org_and_docs(
     data = coerce_items_payload(serieIII_json_or_path)
     items = data.get("items", [])
 
-    spans = _collect_spans(doc_body)  # JUNK skipped
+    spans = _collect_spans(doc_body)  # JUNK skipped on primary pass
     doc_text = doc_body.text
     out_path = Path(out_dir)
     if write_org_files or write_doc_files:
@@ -288,7 +410,7 @@ def divide_body_by_org_and_docs(
 
     if not hierarchical:
         # -----------------------
-        # FLAT MODE (unchanged)
+        # FLAT MODE (with fallback to IGNORE_LABELS when ORG_LABELS miss)
         # -----------------------
         json_org_keys = {_org_key(item.get("org", {}).get("text", "")) for item in items}
         org_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, json_org_keys)
@@ -296,6 +418,18 @@ def divide_body_by_org_and_docs(
         body_org_lookup: Dict[str, Tuple[SpanInfo, int, int]] = {}
         for org_span, bstart, bend in org_blocks:
             body_org_lookup.setdefault(_org_key(org_span.text), (org_span, bstart, bend))
+
+        # try fallback anchors once using IGNORE_LABELS for any missing key
+        missing_keys = {k for k in json_org_keys if k not in body_org_lookup}
+        if missing_keys:
+            fallback_blocks = _build_blocks_coalesced_from_doc(
+                doc_body, doc_text, IGNORE_LABELS, missing_keys
+            )
+            for org_span, bstart, bend in fallback_blocks:
+                key = _org_key(org_span.text)
+                # Only fill gaps (don't override primary matches)
+                if key in missing_keys and key not in body_org_lookup:
+                    body_org_lookup[key] = (org_span, bstart, bend)
 
         total_orgs = len(items)
 
@@ -359,7 +493,7 @@ def divide_body_by_org_and_docs(
 
     else:
         # -----------------------
-        # HIERARCHICAL MODE (MODIFIED TO PRESERVE top_org AND ADD sub_org IN extras)
+        # HIERARCHICAL MODE (with fallbacks for top_org and sub_org to IGNORE_LABELS)
         # -----------------------
         top_org_keys = {_org_key(item.get("top_org", {}).get("text", "")) for item in items}
         top_blocks = _build_org_blocks_coalesced_to_json(doc_text, spans, top_org_keys)
@@ -368,24 +502,33 @@ def divide_body_by_org_and_docs(
         for top_span, tstart, tend in top_blocks:
             top_lookup.setdefault(_org_key(top_span.text), (top_span, tstart, tend))
 
+        # fallback for missing top_orgs using IGNORE_LABELS
+        missing_top = {k for k in top_org_keys if k not in top_lookup}
+        if missing_top:
+            fb_top_blocks = _build_blocks_coalesced_from_doc(
+                doc_body, doc_text, IGNORE_LABELS, missing_top
+            )
+            for top_span, tstart, tend in fb_top_blocks:
+                key = _org_key(top_span.text)
+                if key in missing_top and key not in top_lookup:
+                    top_lookup[key] = (top_span, tstart, tend)
+
         total_orgs = sum(len(item.get("sub_orgs", [])) for item in items)
 
         for item in items:
             top_org_raw = item.get("top_org", {}).get("text", "")
             top_key = _org_key(top_org_raw)
             sub_orgs = item.get("sub_orgs", [])
-            top_org_clean = _strip_markdown_bold(top_org_raw).strip()   # <— for consistent use
+            top_org_clean = _strip_markdown_bold(top_org_raw).strip()
 
             if top_key not in top_lookup:
-                # If the top org block isn't in the body, mark each sub_org as missing
+                # top_org still missing after fallback
                 for sub in sub_orgs:
                     sub_raw = sub.get("org", {}).get("text", "")
                     sub_org_clean = _strip_markdown_bold(sub_raw).strip()
                     org_missing += 1
                     if verbose:
                         print(f"[WARN] top_org missing; marking sub_org missing: {sub_raw!r}")
-
-                    # MOD: keep org as top_org, attach sub_org in extras
                     obr = OrgBlockResult(
                         org=top_org_clean,
                         org_block_text="",
@@ -402,8 +545,17 @@ def divide_body_by_org_and_docs(
             _, tstart, tend = top_lookup[top_key]
 
             sub_keys = {_org_key(sub.get("org", {}).get("text", "")) for sub in sub_orgs}
+            # primary anchors via ORG_LABELS (from spans)
             sub_anchors = _collect_suborg_anchors_coalesced(doc_text, spans, tstart, tend, sub_keys)
             sub_anchors_sorted = sorted(sub_anchors, key=lambda s: s.start_char)
+
+            # fallback anchors via IGNORE_LABELS directly from doc if needed
+            if not sub_anchors_sorted and sub_keys:
+                fb_anchors = _collect_anchors_coalesced_in_range(
+                    doc_body, doc_text, tstart, tend, sub_keys, IGNORE_LABELS
+                )
+                if fb_anchors:
+                    sub_anchors_sorted = sorted(fb_anchors, key=lambda s: s.start_char)
 
             end_by_anchor_id: Dict[int, int] = {}
             for idx_a, a in enumerate(sub_anchors_sorted):
@@ -425,8 +577,6 @@ def divide_body_by_org_and_docs(
                     org_missing += 1
                     if verbose:
                         print(f"[WARN] sub_org not found in body: {sub_raw!r}")
-
-                    # MOD: keep org as top_org, attach sub_org in extras
                     obr = OrgBlockResult(
                         org=top_org_clean,
                         org_block_text="",
@@ -464,7 +614,6 @@ def divide_body_by_org_and_docs(
                 status = "ok" if len(slices) == len(json_docs) == matched_count else "partial"
                 total_docs_matched += len(matched_slices)
 
-                # MOD: keep org as top_org, attach sub_org in extras
                 obr = OrgBlockResult(
                     org=top_org_clean,
                     org_block_text=doc_text[occurs[0].start_char : end_by_anchor_id[id(occurs[-1])]],

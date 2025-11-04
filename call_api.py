@@ -3,8 +3,9 @@ import json
 from pathlib import Path
 import requests
 
+
 API_URL = "http://localhost:8000/extract"     # FastAPI endpoint
-FILE_PATH = "input_pdfs/IIISerie-004-2025-02-27.pdf"             # <-- change to your PDF
+FILE_PATH = "input_pdfs/ISerie-002-2005-01-14sup3.pdf"             # <-- change to your PDF
 OUTPUT_PATH = "last_extract.txt"              # always overwrite this file
 
 def main():

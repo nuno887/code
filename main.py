@@ -290,7 +290,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="ISerie-055-2003-05-23.pdf",
+        default="ISerie-002-2005-01-14sup3.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -363,7 +363,7 @@ def main():
     print("===================================")
 
     # 5) Dump HTML artifacts
-    render_entities_html(doc_sumario, Path("ents.html"))
+    render_entities_html(doc_body, Path("ents.html"))
     render_results_html(results, summary, Path("results.html"))
 
     print("Saved entity visualization to ents.html")
