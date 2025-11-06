@@ -647,7 +647,19 @@ def divide_body_by_org_and_docs(
         "docs_expected": total_docs_expected,
         "docs_matched": total_docs_matched,
     }
-    return results, summary
+    results_reduzed = []
+    for r in results:
+        item = {
+            "org": getattr(r, "org", ""),
+            "status": getattr(r, "status", ""),
+            "docs": [{"doc_name": d.doc_name, "text": d.text} for d in getattr(r, "docs", [])]
+        }
+        extras = getattr(r, "extras", None)
+        if extras and "sub_org" in extras:
+            item["sub_org"] = extras["sub_org"]
+        results_reduzed.append(item)
+
+    return results, results_reduzed, summary
 
 
 def print_summary(summary: Dict[str, Any]) -> None:

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .nlp_pipeline import nlp
 from .models import SubSlice, DocSlice, OrgResult
@@ -8,8 +8,6 @@ from .org_windows import _collect_org_windows_from_ents, _match_org_to_window
 from .doc_type_match import _doc_type_key, _match_doc_type_headers, _compute_next_bounds_per_window
 from .subdivision import _reparse_seg_text, _allowed_child_titles_for_item, _subdivide_seg_text_by_allowed_headers
 
-#from .debug import DBG
-
 
 def divide_body_by_org_and_docs_serieIII(
     doc_body,
@@ -17,44 +15,38 @@ def divide_body_by_org_and_docs_serieIII(
     *,
     reparse_segments: bool = True,
     subdivide_children: bool = True,
-) -> Tuple[List[OrgResult], Dict[str, Any]]:
+) -> Tuple[List[OrgResult], List[Dict[str, Any]], Dict[str, Any]]:
     """
     Serie III splitter:
       1) Anchor top-level items to DOC_NAME_LABEL in body within org windows.
       2) Slice body into per-item segments [content_start:end).
       3) (Optional) Reparse each segment and subdivide by payload-approved child headers.
-      4) NEW: If an item has no doc_name, create a segment spanning its org window and
+      4) If an item has no doc_name, create a segment spanning its org window and
          run normal children subdivision on it.
     """
 
-
-
     if not isinstance(payload, dict):
-        return [], {"error": "invalid_payload"}
+        return [], [], {"error": "invalid_payload"}
 
+    # --- PREP STAGE ----------------------------------------------------------
     org_map = _build_org_map(payload)
     _allowed_orgs = [(o.get("text") or "").strip() for o in payload.get("orgs", [])]
     org_windows = _collect_org_windows_from_ents(doc_body, allowed_orgs=_allowed_orgs)
-
     doc_type_matches = _match_doc_type_headers(doc_body, payload, org_windows)
     matched_count = sum(1 for v in doc_type_matches.values() if v is not None)
-
     next_bounds = _compute_next_bounds_per_window(doc_type_matches, org_windows)
     items_by_org = _group_items_by_org(payload)
 
     results: List[OrgResult] = []
     total_slices = 0
 
-
-
-
+    # --- MAIN LOOP -----------------------------------------------------------
     for org_id, org_name in org_map.items():
         win_idx, win_status = _match_org_to_window(org_name, org_windows)
         items = sorted(
             items_by_org.get(org_id, []),
             key=lambda it: (it.get("paragraph_id") is None, it.get("paragraph_id")),
         )
-
         org_result = OrgResult(org=org_name, status=win_status, docs=[])
 
         for item in items:
@@ -63,15 +55,13 @@ def divide_body_by_org_and_docs_serieIII(
             key = _doc_type_key(item)
             mt = doc_type_matches.get(key)
 
-
-
-            # NEW: items without doc_name → segment over org window and subdivide children
+            # A) items without doc_name → segment over org window and subdivide children
             if mt is None and not title and win_idx is not None:
                 w = org_windows[win_idx]
                 seg_text = doc_body.text[w["start"]:w["end"]]
 
                 ds = DocSlice(
-                    doc_name="(Preambulo)",
+                    doc_name="(Empty)",
                     text=seg_text,
                     status="doc_children_segment",
                     confidence=0.5,
@@ -87,14 +77,14 @@ def divide_body_by_org_and_docs_serieIII(
                 total_slices += 1
                 continue
 
-            # No anchor found for titled item → unanchored
+            # B) titled item but no header anchor
             if mt is None:
                 org_result.docs.append(
                     DocSlice(doc_name=title, text="", status="doc_type_unanchored", confidence=0.0)
                 )
                 continue
 
-            # Determine slice [start:end) using next header in the same window
+            # C) titled item with header match
             start = mt["start"]
             win_for_item = mt.get("window_index")
             if win_for_item is not None:
@@ -107,8 +97,6 @@ def divide_body_by_org_and_docs_serieIII(
             header_end = mt.get("end", start)
             content_start = header_end
             seg_text = doc_body.text[content_start:end]
-
-
 
             ds = DocSlice(
                 doc_name=title,
@@ -128,6 +116,7 @@ def divide_body_by_org_and_docs_serieIII(
 
         results.append(org_result)
 
+    # --- SUMMARY -------------------------------------------------------------
     summary = {
         "orgs_in_payload": len(org_map),
         "org_windows_found": len(org_windows),
@@ -136,5 +125,44 @@ def divide_body_by_org_and_docs_serieIII(
         "segment_reparsed": bool(reparse_segments),
         "segments_with_subdivisions": sum(len(d.subs) for r in results for d in r.docs),
     }
+    # --- MINIMAL OUTPUT ------------------------------------------------------
+# Keep only: org, docs, doc_name, subs (title, body)
 
-    return results, summary
+    results_min: List[Dict[str, Any]] = []
+
+    for r in results:  # r: OrgResult
+        org_item = {
+            "org": getattr(r, "org", ""),
+            "docs": [],
+        }
+
+        for d in getattr(r, "docs", []):  # d: DocSlice
+            doc_item = {
+                "doc_name": getattr(d, "doc_name", ""),
+                "subs": [],
+            }
+
+            subs = getattr(d, "subs", None) or []
+            for s in subs:
+                if isinstance(s, dict):
+                    title = s.get("title") or s.get("doc_name", "")
+                    body = s.get("body", s.get("text", ""))  # prefer body; fallback to text
+                else:
+                    title = getattr(s, "title", "") or getattr(s, "doc_name", "")
+                    body = getattr(s, "body", None) or getattr(s, "text", "") or ""
+
+                # Prepend the title to the body (keep title field intact)
+                body_with_title = f"{title}\n{body}" if body else title
+
+                doc_item["subs"].append({
+                    "title": title,
+                    "body": body_with_title,
+                })
+
+            org_item["docs"].append(doc_item)
+
+        results_min.append(org_item)
+
+
+   
+    return results_min, summary
