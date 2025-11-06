@@ -74,13 +74,13 @@ def split_body(doc_body, payload, serie_iii: bool):
         # Keep your Serie I/II path as-is if you still use it elsewhere
         
 
-        results, results_reduzed,summary = divide_body_by_org_and_docs(
+        results,summary = divide_body_by_org_and_docs(
             doc_body,
             payload,
             write_org_files=False,
             write_doc_files=False,
         )
-    return results,results_reduzed,summary
+    return results,summary
 
 
 def main():
@@ -88,7 +88,7 @@ def main():
     parser.add_argument(
         "pdf",
         nargs="?",
-        default="IISerie-099-2005-05-23Supl.pdf",
+        default="IIISerie-05 2007-03-02.pdf",
         help="PDF filename inside input_pdfs/ (default: %(default)s)",
     )
     args = parser.parse_args()
@@ -117,22 +117,11 @@ def main():
    
  
     # 4) Split body (Serie III uses our new splitter)
-    results, results_reduzed,summary = split_body(doc_body, payload, serie_iii)
+    results,summary = split_body(doc_body, payload, serie_iii)
 
     # print(f"results:", results)
     with open("results.txt", "w", encoding="utf-8") as f:
-        f.write(f"results: {results_reduzed}\n")
-
-
-
-
-
-
-  
-   
-
- 
-
+        f.write(f"results: {results}\n")
 
 
 

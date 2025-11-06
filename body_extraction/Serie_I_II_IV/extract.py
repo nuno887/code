@@ -649,17 +649,17 @@ def divide_body_by_org_and_docs(
     }
     results_reduzed = []
     for r in results:
+        sub_org = getattr(r, "extras", {}).get("sub_org")
         item = {
             "org": getattr(r, "org", ""),
-            "status": getattr(r, "status", ""),
-            "docs": [{"doc_name": d.doc_name, "text": d.text} for d in getattr(r, "docs", [])]
+            "docs": [{"doc_name": d.doc_name,"sub_org": sub_org, "text": d.text} for d in getattr(r, "docs", [])]
         }
         extras = getattr(r, "extras", None)
         if extras and "sub_org" in extras:
             item["sub_org"] = extras["sub_org"]
         results_reduzed.append(item)
 
-    return results, results_reduzed, summary
+    return results_reduzed, summary
 
 
 def print_summary(summary: Dict[str, Any]) -> None:

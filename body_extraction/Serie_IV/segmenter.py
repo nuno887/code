@@ -131,37 +131,31 @@ def divide_body_by_org_and_docs_serieIII(
     results_min: List[Dict[str, Any]] = []
 
     for r in results:  # r: OrgResult
+        org_name = getattr(r, "org", "").replace("\n", " ")
         org_item = {
-            "org": getattr(r, "org", ""),
-            "docs": [],
+            "org": org_name,
+            "subs": [],
         }
 
         for d in getattr(r, "docs", []):  # d: DocSlice
-            doc_item = {
-                "doc_name": getattr(d, "doc_name", ""),
-                "subs": [],
-            }
-
             subs = getattr(d, "subs", None) or []
             for s in subs:
                 if isinstance(s, dict):
                     title = s.get("title") or s.get("doc_name", "")
-                    body = s.get("body", s.get("text", ""))  # prefer body; fallback to text
+                    body = s.get("body", s.get("text", "")) or ""
                 else:
                     title = getattr(s, "title", "") or getattr(s, "doc_name", "")
                     body = getattr(s, "body", None) or getattr(s, "text", "") or ""
 
-                # Prepend the title to the body (keep title field intact)
-                body_with_title = f"{title}\n{body}" if body else title
+                body_with_title = f"{org_name}\n{title}\n\n{body}" if body else title
 
-                doc_item["subs"].append({
+                org_item["subs"].append({
                     "title": title,
                     "body": body_with_title,
                 })
 
-            org_item["docs"].append(doc_item)
-
         results_min.append(org_item)
+
 
 
    
