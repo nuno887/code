@@ -650,9 +650,10 @@ def divide_body_by_org_and_docs(
     results_reduzed = []
     for r in results:
         sub_org = getattr(r, "extras", {}).get("sub_org")
+        org = getattr(r, "org", "").replace("\n", " ")
         item = {
-            "org": getattr(r, "org", ""),
-            "docs": [{"doc_name": d.doc_name,"sub_org": sub_org, "text": d.text} for d in getattr(r, "docs", [])]
+            "org": org,
+            "docs": [{"title": d.doc_name,"sub_org": sub_org, "text": f"{org}\n{(sub_org + '\n') if sub_org not in (None, '', 'null') else ''}{d.doc_name}\n\n{d.text}"} for d in getattr(r, "docs", [])]
         }
         extras = getattr(r, "extras", None)
         if extras and "sub_org" in extras:

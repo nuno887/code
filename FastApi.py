@@ -27,10 +27,6 @@ from body_extraction import (
     divide_body_by_org_and_docs,
     divide_body_by_org_and_docs_serieIII,
 )
-from resultNormalizer import (
-    normalize_results,
-    build_slim_payload,
-)
 
 # -----------------------
 # App & Config
@@ -175,25 +171,9 @@ def process_pdf(temp_pdf_path: Path, original_filename: str) -> Dict[str, Any]:
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"split_body: {e}")
+    return results
 
-    # 7) Normalize & build slim
-    try:
-        mode = "serie_iii" if serie_iii else "serie_std"
-        input_meta = {"filename": original_filename, "text_length": len(text)}
-        unified = normalize_results(
-            mode=mode,
-            raw_results=results,
-            raw_summary=summary,
-            input_meta=input_meta,
-        )
-        slim = build_slim_payload(
-            filename=original_filename,
-            unified=unified,
-            include_text=True,
-        )
-        return slim
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"normalize: {e}")
+   
 
 
 # -----------------------
@@ -261,7 +241,7 @@ def _startup_init_nlp():
 # -----------------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("fastapi_app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("FastApi:app", host="0.0.0.0", port=8000, reload=True)
 
 
 

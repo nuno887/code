@@ -134,7 +134,7 @@ def divide_body_by_org_and_docs_serieIII(
         org_name = getattr(r, "org", "").replace("\n", " ")
         org_item = {
             "org": org_name,
-            "subs": [],
+            "docs": [],
         }
 
         for d in getattr(r, "docs", []):  # d: DocSlice
@@ -146,12 +146,15 @@ def divide_body_by_org_and_docs_serieIII(
                 else:
                     title = getattr(s, "title", "") or getattr(s, "doc_name", "")
                     body = getattr(s, "body", None) or getattr(s, "text", "") or ""
+                
+                if not title:
+                    continue
 
                 body_with_title = f"{org_name}\n{title}\n\n{body}" if body else title
 
-                org_item["subs"].append({
+                org_item["docs"].append({
                     "title": title,
-                    "body": body_with_title,
+                    "text": body_with_title,
                 })
 
         results_min.append(org_item)
